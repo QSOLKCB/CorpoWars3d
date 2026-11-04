@@ -14,6 +14,19 @@ audio and local saves. No engine, CDN, remote font, runtime packages or accounts
 
 *Packaged WebGL 2 build in Chromium CI using a software GPU. [Tactical view](docs/images/tactical.png) · [Exact run evidence](docs/QA_NATIVE_CI.json).*
 
+## Games in this repository
+
+| Game | Location | Launch |
+| --- | --- | --- |
+| CorpoWars3d — squad FPS | Repository root / `src/` | Browser, instructions below |
+| **Dividend Zero — DOS demake** | [`games/dos/`](games/dos/README.md) | Real-mode DOS `.COM` in DOSBox |
+
+The DOS game is a separate 2D run-and-gun: three districts, four switchable agents,
+follow/hold orders, bitmap graphics and three original mathematical four-channel
+MOD tracks. [Download the DOSBox-ready ZIP](games/dos/download/CORPO-DOS.zip),
+extract it, and run `dosbox -conf DOSBOX.CONF` from the extracted folder.
+The browser deployment continues to package only the FPS.
+
 ## Play locally
 
 ```sh

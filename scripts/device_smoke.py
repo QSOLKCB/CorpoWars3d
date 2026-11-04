@@ -5,8 +5,10 @@ import math
 def run_device_checks(browser, url, out):
     errors = []
     context = browser.new_context(viewport={"width": 1280, "height": 800})
-    context.add_init_script("""window.testPads=[];
-      Object.defineProperty(navigator,'getGamepads',{value:()=>window.testPads});""")
+    context.add_init_script("""window.testPads=[];window.testPadRevision=0;window.testPadSampled=-1;
+      Object.defineProperty(navigator,'getGamepads',{value:()=>{
+        window.testPadSampled=window.testPadRevision;return window.testPads;
+      }});""")
     page = context.new_page()
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(url)
@@ -18,9 +20,12 @@ def run_device_checks(browser, url, out):
     page.bring_to_front()
 
     def pad(buttons=None, axes=None):
-        page.evaluate("""({buttons,axes})=>{window.testPads=[{index:0,id:'Emulated Xbox',connected:true,mapping:'standard',
-          axes:axes||[0,0,0,0],buttons:Array.from({length:17},(_,i)=>({value:buttons.includes(i)?1:0,pressed:buttons.includes(i)}))}];}""",
-                      {"buttons": buttons or [], "axes": axes})
+        revision = page.evaluate("""({buttons,axes})=>{window.testPads=[{index:0,id:'Emulated Xbox',connected:true,mapping:'standard',
+          axes:axes||[0,0,0,0],buttons:Array.from({length:17},(_,i)=>({value:buttons.includes(i)?1:0,pressed:buttons.includes(i)}))}];return ++window.testPadRevision;}""",
+                                 {"buttons": buttons or [], "axes": axes})
+        # A SwiftShader frame can take longer than a short synthetic press. Do
+        # not release/re-arm until the normal RAF gamepad poll samples this value.
+        page.wait_for_function("revision=>window.testPadSampled>=revision", arg=revision)
 
     def neutral():
         pad()
@@ -28,7 +33,6 @@ def run_device_checks(browser, url, out):
 
     def press(button):
         pad([button])
-        page.wait_for_timeout(120)
         neutral()
 
     neutral()

@@ -1,7 +1,7 @@
 # CorpoWars3d engineering rules
 
 - Keep the Apache-2.0 license, donor commit provenance and NOTICE intact.
-- Runtime is native HTML/CSS/ES modules, raw WebGL/Canvas 2D and synthesized Web
+- The browser FPS runtime is native HTML/CSS/ES modules, raw WebGL/Canvas 2D and synthesized Web
   Audio. Do not add a game engine, CDN, remote assets or runtime packages.
 - Keep simulation and FPS rules independent of DOM, graphics and ambient clocks.
   Preserve squad actor identity/resources across perspective switches and the
@@ -22,3 +22,6 @@
   justify an approximation. Report source hashes for local benchmark evidence.
 - Submit implementation via a PR. Do not merge, release, retag or publish as part
   of implementation unless the owner authorizes those actions.
+
+- `games/dos/` is a separate, authorized native DOS target. Its scoped rules and
+  checks live in `games/dos/AGENTS.md`; do not put DOS binaries in the web build.

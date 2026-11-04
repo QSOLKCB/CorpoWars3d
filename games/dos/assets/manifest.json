@@ -1,0 +1,36 @@
+{
+  "format": "M.K. / four channels / signed 8-bit samples",
+  "mix_hz": 11025,
+  "roots": 240,
+  "neighbors_per_root": 56,
+  "tracks": {
+    "MENU.MOD": {
+      "bytes": 7932,
+      "sha256": "934d3169cf2bfbe523d2d4996d8fa6f3f9b8d3e812fc84bf3518ffe4b05d480b",
+      "seed": 232,
+      "bpm": 112,
+      "patterns": 4,
+      "orders": 8,
+      "samples": 6
+    },
+    "ACTION.MOD": {
+      "bytes": 7932,
+      "sha256": "692126633bdde6c3be3f5f88bf56cffccef690b715f55aa81effa44c871aed15",
+      "seed": 12648430,
+      "bpm": 132,
+      "patterns": 4,
+      "orders": 8,
+      "samples": 6
+    },
+    "BOSS.MOD": {
+      "bytes": 7932,
+      "sha256": "9d0991216417645c33eb6db47db22f12187009f5baf52ba375570cd2a78f6729",
+      "seed": 45141,
+      "bpm": 148,
+      "patterns": 4,
+      "orders": 8,
+      "samples": 6
+    }
+  },
+  "graphics_sha256": "721c799631246ce5cd68c96843d60760d37d1565efba286d862d6c8202958571"
+}
