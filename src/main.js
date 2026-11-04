@@ -27,11 +27,21 @@ let background=null,mapWorld=null,lastMapPoint=null;
 const agentButtons=[],worldLabels=[];
 function saveCampaign(){const ok=write(SAVE,JSON.stringify(campaign));$('saveStatus').textContent=ok?'PROGRESS SAVED ON THIS BROWSER.':'SESSION ONLY / browser storage is unavailable.';}
 function clearInput(){held.clear();fire=false;ads=false;}
+function syncPauseUI(){
+  if(g.phase!=='active')return;
+  const planning=g.paused&&g.tactical;
+  $('pause').hidden=!g.paused||planning;
+  $('pauseButton').textContent=g.paused?'▶':'Ⅱ';
+  $('pauseButton').setAttribute('aria-label',g.paused?'Resume game':'Pause game');
+  $('tacticalFeed').textContent=planning?'PAUSED / ORDERS QUEUED':'LIVE TACTICAL FEED';
+  $('returnFPS').querySelector('kbd').textContent=planning?'M':'TAB';
+}
 function setPaused(value){
   if(!playing||g.phase!=='active')return;
-  g.paused=value;clock.setPaused(value);clearInput();sound.stopMusic();$('pause').hidden=!value;
+  g.paused=value;clock.setPaused(value);clearInput();sound.stopMusic();syncPauseUI();
   if(value){$('pauseTitle').textContent='TAKE A BREATH.';$('pauseText').textContent='The district can wait. Your squad is paused.';$('resume').hidden=false;$('resume').firstChild.textContent='RESUME OPERATION ';document.exitPointerLock?.();}
   else if(!g.tactical)requestControl();
+  renderHUD();
 }
 function requestControl(){
   if(settings.keyboard||keyboardFallback||g.tactical||!playing||g.paused)return;
@@ -44,6 +54,7 @@ function requestControl(){
 function tactical(value=!g.tactical){
   if(!playing||g.phase!=='active')return;
   clearInput();setTactical(g,value);$('tactical').hidden=!value;document.body.classList.toggle('tactical-mode',value);
+  syncPauseUI();
   if(value)document.exitPointerLock?.();else if(!g.paused)requestControl();
   renderHUD();
 }
@@ -57,6 +68,7 @@ function startMission(){
   renderer.setWorld(g.world);mapWorld=null;settled=false;playing=true;lastHp=activeAgent(g).hp;
   $('menu').hidden=true;$('hud').hidden=false;$('pause').hidden=true;$('tactical').hidden=true;
   document.body.classList.remove('tactical-mode');clock.reset();clock.setPaused(false);clearInput();hadLock=false;
+  syncPauseUI();
   sound.start();sound.setVolume(settings.volume);sound.setMusicVolume(settings.musicVolume);sound.play('start');
   $('districtHud').textContent=g.mission.district.toUpperCase();renderHUD();requestControl();
 }
@@ -135,11 +147,11 @@ function renderHUD(){
   }
   $('weaponName').textContent=WEAPONS[a.weapon].name.toUpperCase();$('ammo').textContent=String(a.ammo).padStart(2,'0');$('magazine').textContent='/ '+a.magazine;
   $('weaponState').textContent=a.reload>0?'RELOADING '+a.reload.toFixed(1)+'s':a.stance==='crouch'?'CROUCHED / '+a.name:'DIRECT LINK / '+a.name;
-  $('status').textContent=g.lockdownRemaining!==null?'LOCKDOWN / '+Math.ceil(g.lockdownRemaining)+'s':g.tactical?'TACTICAL UPLINK / LIVE':settings.keyboard||keyboardFallback?'KEYBOARD AIM ACTIVE':g.alert>0?'SECURITY ALERT':'UPLINK STABLE';
+  $('status').textContent=g.paused?(g.tactical?'TACTICAL UPLINK / PAUSED':'UPLINK PAUSED'):g.lockdownRemaining!==null?'LOCKDOWN / '+Math.ceil(g.lockdownRemaining)+'s':g.tactical?'TACTICAL UPLINK / LIVE':settings.keyboard||keyboardFallback?'KEYBOARD AIM ACTIVE':g.alert>0?'SECURITY ALERT':'UPLINK STABLE';
   $('stats').textContent=`${fps} FPS / ${renderer.software?'SOFTWARE':renderer.instanced?'INSTANCED':'WEBGL COMPATIBILITY'} / ${Math.floor(g.time/60)}:${String(Math.floor(g.time%60)).padStart(2,'0')}`;
   for(const b of document.querySelectorAll('[data-command]')){
     const kind=b.dataset.command;
-    b.disabled=(kind==='escort'&&!g.courier?.active)||(kind==='mode'&&![...g.selected].some(id=>g.agents[id]?.weapon==='aug'));
+    b.disabled=(kind==='escort'&&!g.courier?.active)||(kind==='mode'&&![...g.selected].some(id=>g.agents[id]?.weapon==='aug'))||(g.paused&&['heal','emp'].includes(kind));
     if(kind==='fire')b.lastChild.textContent=g.holdFire?' HOLD FIRE':' WEAPONS FREE';
     if(kind==='emp')b.lastChild.textContent=' EMP / '+g.pulses;
     if(kind==='heal')b.lastChild.textContent=' PATCH / '+g.medkits;
@@ -215,7 +227,7 @@ for(const key of Object.keys(defaults)){
 }
 $('difficulty').addEventListener('change',()=>{campaign.difficulty=$('difficulty').value;saveCampaign();});
 $('deploy').addEventListener('click',startMission);$('resume').addEventListener('click',()=>g.phase==='active'?setPaused(false):headquarters());
-$('restart').addEventListener('click',startMission);$('headquarters').addEventListener('click',headquarters);$('pauseButton').addEventListener('click',()=>setPaused(true));
+$('restart').addEventListener('click',startMission);$('headquarters').addEventListener('click',headquarters);$('pauseButton').addEventListener('click',()=>setPaused(!g.paused));
 $('miniMapButton').addEventListener('click',()=>tactical());$('returnFPS').addEventListener('click',()=>tactical(false));
 $('selectAll').addEventListener('click',()=>{selectSquad(g,g.agents.map(a=>a.id));renderHUD();});
 $('selectCurrent').addEventListener('click',()=>{selectSquad(g,[g.viewId]);renderHUD();});
@@ -230,15 +242,24 @@ $('tacticalMap').addEventListener('contextmenu',e=>{
 document.addEventListener('keydown',e=>{
   if(!playing||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
   const code=e.code;
-  if(code==='Escape'){if(g.phase==='active')setPaused(!g.paused);return;}
+  if(code==='Escape'){if(!e.repeat&&g.phase==='active')setPaused(!g.paused);return;}
   if(code==='KeyP'&&!e.repeat){setPaused(!g.paused);return;}
-  if(g.paused)return;
+  const commands={KeyF:'follow',KeyG:'move',KeyH:'hold',KeyV:'fire',KeyX:'emp',KeyC:'heal',KeyZ:'panic',KeyE:'escort',KeyB:'mode'};
+  if(g.paused){
+    if(!g.tactical)return;
+    // Planning controls stay live; movement, aiming and trigger input never enter
+    // the held-input set. Tab retains ordinary keyboard focus navigation here.
+    if(commands[code]){e.preventDefault();if(!e.repeat)execute(commands[code]);}
+    else if(code==='KeyM'){e.preventDefault();if(!e.repeat)tactical(false);}
+    else if(/^Digit[1-4]$/.test(code)){if(!e.repeat)switchTo(Number(code.slice(-1))-1);}
+    else if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(code))e.preventDefault();
+    return;
+  }
   if(['Tab','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(code))e.preventDefault();
   held.add(code);if(e.repeat)return;
   if(/^Digit[1-4]$/.test(code)){switchTo(Number(code.slice(-1))-1);return;}
   if(code==='KeyQ'){nextAgent(g);clearInput();lastHp=activeAgent(g).hp;renderHUD();return;}
   if(code==='Tab'||code==='KeyM'){tactical();return;}
-  const commands={KeyF:'follow',KeyG:'move',KeyH:'hold',KeyV:'fire',KeyX:'emp',KeyC:'heal',KeyZ:'panic',KeyE:'escort',KeyB:'mode'};
   if(commands[code])execute(commands[code]);if(code==='KeyR'&&reload(g))sound.play('reload');
 });
 document.addEventListener('keyup',e=>held.delete(e.code));

@@ -59,13 +59,18 @@ piloted. If the active agent falls, control transfers to the next survivor.
 | P / Esc | Pause; orders can be planned on the paused tactical map |
 | Arrows / Space | Keyboard aim / fire; keyboard mode disables pointer lock |
 
-The map is **live**. Press P to pause for planning. To pilot a selected agent
+The map is **live**. Press P to pause for planning: selection, map orders and
+command shortcuts remain available while movement, combat and timers stop.
+Press P or the resume button to apply the queued orders. While planning, Tab
+navigates the controls and M returns to the paused first-person view.
+To pilot a selected agent
 from the map, press 1–4 or double-click their card. Move orders include the
 piloted agent's saved route, but direct input remains in charge until you leave
 their view. Follow applies to selected teammates. Hold-fire governs AI triggers;
 the operator can still fire manually.
 
-Terminals operate automatically when a living agent is stationary nearby.
+Terminals and hold zones require a living agent to be stationary nearby. Direct
+movement and jumping interrupt interaction even when the AI route is empty.
 Complete the relay, then the second objective, then bring **every surviving
 agent** into extraction. Witness Protection also requires the courier alive at
 extraction: press E after release to keep selected agents escorting them.

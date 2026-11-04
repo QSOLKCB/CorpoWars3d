@@ -1,10 +1,13 @@
 # Architecture
 
 `src/simulation.js`, `campaign.js` and `challenges.js` preserve the original
-CorpoWars simulation and data. The only behavioral hook in the donor simulation
-skips movement/automatic triggers for `game.controlled`, after advancing that
-agent's cooldown and reload. Ordinary games without this field keep the original
-behavior. Mission rules, target acquisition, line of sight, formation routing,
+CorpoWars simulation and data. The donor core skips automatic movement/triggers
+for `game.controlled`, while retaining that agent's cooldown and reload. An
+optional pure control stage runs after previous-pose capture and before combat
+and objective evaluation. It records actual direct motion so moving or airborne
+piloted agents cannot operate stationary terminals or hold zones. The flag resets
+each tick, including when control returns to AI. Calls without this control stage
+keep the original autonomous behavior. Target acquisition, line of sight, formation routing,
 security behavior, economy and save validation remain in the donor core.
 
 `src/fps.js` is a pure adapter: perspective selection, manual motion, 3D ray
@@ -24,7 +27,10 @@ projection/view matrices and slab ray-box intersection are used directly.
 - Direct movement cancels only that actor's route, target and follow assignment.
 - Other agents retain their routes and original automatic combat behavior.
 - A direct trigger is camera-aligned hitscan against the nearest solid building
-  or actor. Friendly actors stop the ray but take no friendly-fire damage.
+  or actor, including the living released courier. Friendly actors stop the ray
+  but take no friendly-fire damage. Inactive and dead couriers do not obstruct it.
+- Follow cancels the outstanding escort assignment. Escort clears Follow for
+  its selected recipients, so competing schedulers cannot overwrite their orders.
 - Native and software renderers consume the same state and hit results.
 
 Direct shots have a minimum 40 m reach, with a 2× head hit multiplier. Autonomous
@@ -46,6 +52,12 @@ after a successful FPS lock and explicit pause stop simulation and clear all
 held inputs. Deliberately unlocking for tactical command does not pause it.
 Pointer-lock rejection falls back to keyboard aim; a lock is never required to
 play. Mouse buttons are tracked independently using the full buttons bitmask.
+
+A tactical pause leaves the map, squad selection and order controls available.
+Its keyboard route accepts planning commands without collecting held movement,
+aim or trigger inputs. Tab uses normal focus navigation; M returns to first
+person without resuming simulation. Leaving planning opens the ordinary pause
+modal. Both pause transitions clear held inputs and fixed-clock backlog.
 
 Storage and audio are optional. Campaign data is reconstructed through the
 original whitelist/economy validator. Settings have explicit types/ranges.

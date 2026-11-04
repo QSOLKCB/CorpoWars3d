@@ -95,3 +95,57 @@ test('all contracts can complete with squad orders and original objective rules'
     assert.equal(g.phase,'won',g.mission.id+' failed at '+lastKey+' / '+g.time);
   }
 });
+function addCourier(g,overrides={}){
+  g.courier={id:300,team:'courier',active:true,x:8.5,y:7.5,prevX:8.5,prevY:7.5,
+    hp:120,maxHp:120,speed:2.8,path:[],armour:0,...overrides};
+  return g.courier;
+}
+test('released courier stops direct shots without taking player damage',()=>{
+  const g=fixture(),courier=addCourier(g);
+  assert.equal(shoot(g),true);assert.equal(g.lastShot.target,300);
+  assert.equal(courier.hp,120);assert.equal(g.guards[0].hp,100);assert.equal(g.kills,0);
+});
+test('inactive or dead couriers do not block direct shots',()=>{
+  for(const overrides of [{active:false},{hp:0}]){
+    const g=fixture();addCourier(g,overrides);shoot(g);
+    assert.equal(g.lastShot.target,g.guards[0].id);assert.equal(g.guards[0].hp,80);
+  }
+});
+test('Follow supersedes Escort and followers stay with the piloted leader',()=>{
+  const g=fixture();g.guards=[];addCourier(g,{x:20.5,y:8.5});g.exit={x:30.5,y:8.5,done:false,progress:0};
+  for(const a of g.agents)a.x=8.5+a.id*.4;
+  assert.equal(command(g,'escort'),true);assert.equal(command(g,'follow'),true);
+  assert.equal(g.escortFollowing,false);assert.deepEqual(g.escortAgents,[]);
+  for(let i=0;i<240;i++)update(g);
+  for(const a of g.agents.slice(1))assert.ok(Math.hypot(a.x-8.5,a.y-8.5)<1.8,a.name);
+});
+test('Escort supersedes Follow only for its selected recipients',()=>{
+  const g=fixture();addCourier(g);command(g,'follow');g.selected=new Set([1]);
+  assert.equal(command(g,'escort'),true);assert.equal(g.follow.has(1),false);
+  assert.equal(g.follow.has(2),true);assert.equal(g.follow.has(3),true);
+  assert.equal(g.agents[1].command,'ESCORT');assert.deepEqual(g.escortAgents,[1]);
+});
+function terminalFixture(index=0){
+  const g=fixture();g.mission=MISSIONS[index];g.guards=[];g.relay={x:8.5,y:8.5,done:false,progress:0};
+  for(const a of g.agents.slice(1))Object.assign(a,{x:30+a.id*.5,y:30});
+  return g;
+}
+test('a moving direct agent cannot channel a terminal, then can channel after stopping',()=>{
+  const g=terminalFixture();
+  for(let i=0;i<240;i++)update(g,{forward:i%2?1:-1});
+  assert.equal(g.relay.done,false);assert.equal(g.relay.progress,0);
+  for(let i=0;i<200;i++)update(g,{});
+  assert.equal(g.relay.done,true);
+});
+test('direct movement also prevents hold-zone progress',()=>{
+  const g=terminalFixture(3);g.relay.done=true;g.vault={x:8.5,y:8.5,done:false,progress:0};g.holdWavesSpawned=[true,true];
+  for(let i=0;i<240;i++)update(g,{strafe:i%2?1:-1});
+  assert.equal(g.vault.progress,0);assert.equal(g.vault.done,false);
+  update(g,{});assert.ok(g.vault.progress>0);
+});
+test('direct motion is current-tick state, preserves interpolation and clears on AI handoff',()=>{
+  const g=terminalFixture(),a=g.agents[0],start=a.y;
+  update(g,{forward:1});assert.equal(a.prevY,start);assert.ok(a.y<start);assert.equal(a.directMoving,true);
+  assert.equal(g.relay.progress,0);switchAgent(g,1);update(g,{});
+  assert.equal(a.directMoving,false);assert.ok(g.relay.progress>0);
+});

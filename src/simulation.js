@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Adapted for CorpoWars3d: a directly piloted agent keeps timers and orders,
-// but movement and trigger input belong to the FPS controller.
+// but movement and trigger input belong to the FPS controller. A pure control
+// stage applies current-tick movement before combat and stationary objectives.
 // The simulation has no DOM, graphics, audio, network, or wall-clock dependencies.
 import { createCampaign, WEAPONS, AUG_MODES, MISSIONS, DIFFICULTIES, ENEMY_TYPES } from './campaign.js';
 export const STEP = 1 / 30;
@@ -392,7 +393,7 @@ function fire(game, unit, target) {
   }
 }
 
-export function tick(game, dt = STEP) {
+export function tick(game, dt = STEP, applyControl = null) {
   if (game.phase !== 'active' || game.paused || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, .1); game.time += dt; game.alert = Math.max(0, game.alert - dt);
   const lockdownWasRunning=game.lockdownRemaining!==null;
@@ -400,6 +401,8 @@ export function tick(game, dt = STEP) {
   const world = game.world;
   for(const unit of [...game.agents,...game.guards]){unit.prevX=unit.x;unit.prevY=unit.y;}
   if(game.courier){game.courier.prevX=game.courier.x;game.courier.prevY=game.courier.y;}
+  for(const a of game.agents)a.directMoving=false;
+  if(applyControl)applyControl();
   updatePanic(game,dt);
   updateEscortOrders(game,dt);
   for (const a of game.agents) {
@@ -450,8 +453,9 @@ export function tick(game, dt = STEP) {
   const living = game.agents.filter(a => a.hp > 0);
   if (!living.length) { game.phase = 'lost'; message(game, 'All agents lost. Contract terminated.', 'danger'); return; }
   if(game.courier?.active&&game.courier.hp<=0){game.phase='lost';game.escortFollowing=false;return;}
+  const stationary=a=>!a.path.length&&!a.directMoving&&!(a.elevation>0);
   const channel = (point, duration) => {
-    if (living.some(a => distance(a, point) < 1.7 && !a.path.length && lineOfSight(world, a, point))) point.progress = Math.min(duration, point.progress + dt*game.hackSpeed);
+    if (living.some(a => distance(a, point) < 1.7 && stationary(a) && lineOfSight(world, a, point))) point.progress = Math.min(duration, point.progress + dt*game.hackSpeed);
     else point.progress = Math.max(0, point.progress - dt * .5);
     if (point.progress >= duration) point.done = true;
   };
@@ -466,7 +470,7 @@ export function tick(game, dt = STEP) {
     }
   } else if (!game.vault.done) {
     if(game.mission.kind==='hold') {
-      const occupied=living.some(a=>distance(a,game.vault)<1.7&&!a.path.length&&lineOfSight(world,a,game.vault));
+      const occupied=living.some(a=>distance(a,game.vault)<1.7&&stationary(a)&&lineOfSight(world,a,game.vault));
       for(const [i,wave] of (game.mission.waves??[]).entries())if(!game.holdWavesSpawned[i]&&occupied&&game.vault.progress>=wave.at){
         game.holdWavesSpawned[i]=true;
         game.guards.push(...wave.guards.map(([x,y,type],j)=>{

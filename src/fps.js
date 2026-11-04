@@ -11,7 +11,7 @@ export function createOperation(campaign=createCampaign(), index=campaign.missio
   const g=createGame(undefined,campaign,index);
   Object.assign(g,{controlled:0,viewId:0,tactical:false,follow:new Set(),followThink:0,
     hit:0,recoil:0,ads:0,tracers:[],lastShot:null,shots:0});
-  for(const a of g.agents)Object.assign(a,{yaw:0,pitch:0,elevation:0,vy:0,stance:'stand',command:'HOLD'});
+  for(const a of g.agents)Object.assign(a,{yaw:0,pitch:0,elevation:0,vy:0,stance:'stand',command:'HOLD',directMoving:false});
   for(const e of g.guards)e.yaw=0;
   startGame(g);return g;
 }
@@ -62,7 +62,9 @@ export function shoot(g) {
   const origin=eyeOf(a),dir=forward(a.yaw,a.pitch),max=Math.max(a.range,16)*SCALE;
   let nearest=traceCover(g,origin,dir,max),target=null,headshot=false;
   // Friends absorb the trace without taking damage; cover always wins equal ties.
-  for(const unit of [...g.agents,...g.guards]) {
+  const actors=[...g.agents,...g.guards];
+  if(g.courier?.active&&g.courier.hp>0)actors.push(g.courier);
+  for(const unit of actors) {
     if(unit===a||unit.hp<=0)continue;
     const h=unit.stance==='crouch'?1.3:1.9,base=unit.elevation||0;
     const hit=rayBox(origin,dir,boxAt(unit.x*SCALE,base+h/2,unit.y*SCALE,.6,h,.6),nearest);
@@ -88,6 +90,7 @@ function freeAt(world,x,y) {
 }
 export function moveDirect(g,input,dt) {
   const a=activeAgent(g);if(!a||a.hp<=0||g.controlled!==a.id)return;
+  const oldX=a.x,oldY=a.y,oldElevation=a.elevation;
   a.stance=input.crouch?'crouch':'stand';
   let f=clamp(input.forward||0,-1,1),s=clamp(input.strafe||0,-1,1),length=Math.hypot(f,s);
   if(length>1){f/=length;s/=length;}
@@ -106,6 +109,7 @@ export function moveDirect(g,input,dt) {
   if(input.jump&&a.elevation===0){a.vy=4.3;}
   a.elevation=Math.max(0,a.elevation+a.vy*dt);a.vy-=11*dt;
   if(a.elevation===0)a.vy=0;
+  a.directMoving=a.x!==oldX||a.y!==oldY||a.elevation!==oldElevation||a.elevation>0;
 }
 export function command(g,kind,point=aimPoint(g)) {
   if(g.phase!=='active')return false;
@@ -114,10 +118,15 @@ export function command(g,kind,point=aimPoint(g)) {
   if(kind==='heal')return medkit(g);
   if(kind==='emp')return pulse(g);
   if(kind==='panic')return togglePanic(g);
-  if(kind==='escort')return orderEscort(g);
+  if(kind==='escort'){
+    const ok=orderEscort(g);
+    if(ok)for(const id of ids){g.follow.delete(id);g.agents[id].command='ESCORT';}
+    return ok;
+  }
   if(kind==='mode')return cycleMode(g);
   if(kind==='fire'){g.holdFire=!g.holdFire;message(g,g.holdFire?'Squad: hold fire.':'Squad: weapons free.','order');return true;}
   if(kind==='follow'){
+    g.escortFollowing=false;g.escortAgents=[];
     for(const id of ids)if(id!==g.viewId){g.follow.add(id);g.agents[id].command='FOLLOW';}
     g.followThink=0;message(g,'Squad: following the active agent.','order');return true;
   }
@@ -146,11 +155,13 @@ function updateFollow(g,dt) {
 }
 export function update(g,input={},dt=STEP) {
   if(g.paused||g.phase!=='active'||!Number.isFinite(dt)||dt<=0)return;
-  dt=Math.min(dt,.1);updateFollow(g,dt);tick(g,dt);
+  dt=Math.min(dt,.1);updateFollow(g,dt);
+  // The core captures previous poses before this control stage, then evaluates
+  // combat and objectives against the resulting current-tick movement.
+  tick(g,dt,()=>{if(!g.tactical)moveDirect(g,input,dt);});
   if(g.phase!=='active')return;
   if(activeAgent(g).hp<=0)nextAgent(g);
   if(!g.tactical){
-    moveDirect(g,input,dt);
     g.ads=clamp(g.ads+((input.ads?1:0)-g.ads)*Math.min(1,dt*16),0,1);
     if(input.fire)shoot(g);
   }

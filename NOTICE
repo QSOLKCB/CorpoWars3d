@@ -6,7 +6,9 @@ CorpoWars3d is an original single-player tactical FPS adaptation of QSOLKCB/Corp
 Its simulation, campaign, challenges, fictional setting and squad profiles derive
 from CorpoWars at 815b609cd6c2eb5c789a78ebe3e91d0438807b79, Apache-2.0.
 src/simulation.js is modified to hand a piloted agent's movement and trigger to
-the new FPS adapter. Campaign and challenge data retain the original rules.
+the FPS adapter, apply control before objective evaluation and reject direct
+motion for stationary interactions. Campaign and challenge data retain the
+original rules.
 
 src/vendor/time.js is QSOLKCB/VANILLAJS's FixedClock, Apache-2.0, at
 1f965f4e5b6669de0f954e3a39b11aa679e56720.
