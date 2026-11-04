@@ -1,0 +1,41 @@
+{
+  "source_commit": "590e8bbad14621a4cbae5cf587716f4bd90e9600",
+  "source_tree": "a6ac036b7edf7efde2c53b1e9e4cfeb244142c45",
+  "workflow_run": 41856224981,
+  "workflow_url": "https://github.com/QSOLKCB/CorpoWars3d/actions/runs/41856224981",
+  "artifact_id": 13338735417,
+  "artifact_sha256": "e50298d9f519f920f0ba17a9aeff22f8771db1d56ca61c8611a544bbaa5433d9",
+  "environment": "Ubuntu 24.04 CI; Chromium via Playwright 1.56.0; ANGLE SwiftShader software GPU; native WebGL 2 API path",
+  "result": {
+    "passed": true,
+    "renderer": {
+      "draws": 4,
+      "instances": 7143,
+      "uploadBytes": 8064,
+      "staticUploads": 2,
+      "instanced": true,
+      "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+    },
+    "page_errors": [],
+    "checks": [
+      "native WebGL shaders",
+      "repository subpath",
+      "deploy",
+      "agent switch",
+      "tactical all-AI",
+      "map movement",
+      "hold and fire orders",
+      "pause freeze",
+      "manual fire and reload",
+      "overlapping mouse buttons",
+      "static upload retention",
+      "blur cancellation",
+      "offline reload"
+    ]
+  },
+  "screenshot_sha256": {
+    "fps.png": "5a3ed769107685427edaf01a52cc30699905fc679353968e521357c6cdf3be64",
+    "tactical.png": "82b3d22c5cec0e3fa93129af7424e0714ade2318f51687aeb299e7849f80dce0"
+  },
+  "limits": "No physical GPU, owner desktop or hardware frame-rate certification. Later documentation-only revisions do not change the tested runtime."
+}

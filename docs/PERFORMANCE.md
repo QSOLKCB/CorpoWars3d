@@ -69,3 +69,19 @@ Unverified device coverage: Trent's RTX 5060 Ti, other physical GPUs, Safari,
 Firefox, gamepads, touch/mobile play and screen-reader usability during FPS.
 No GPU speedup against an earlier 3D release is claimed: this is the first 3D
 implementation. Screenshots from software mode must be labelled accordingly.
+
+## Executed primary-renderer CI evidence
+
+The WebGL 2 job passed on source commit
+`590e8bbad14621a4cbae5cf587716f4bd90e9600` in run `41856224981`.
+It recorded 7,143 instances, four draw calls and 8,064 dynamic upload bytes in
+the sampled FPS frame. Static upload counts stayed constant during continued
+frames. Thirteen packaged browser checks passed with no page exceptions,
+including simultaneous mouse buttons and offline reload.
+
+`QA_NATIVE_CI.json` preserves exact source/run/artifact identifiers, the verified
+ZIP SHA-256, browser telemetry and screenshot SHA-256 values. The images in
+`images/` are copied directly from that artifact. Chromium used ANGLE SwiftShader
+(a software GPU), so this validates the native WebGL API/shader path and behavior,
+not physical GPU frame rate. Subsequent documentation-only commits leave that
+runtime unchanged.

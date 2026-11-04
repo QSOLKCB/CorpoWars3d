@@ -10,6 +10,10 @@ they follow routes, acquire visible targets, fire, reload and operate objectives
 Native HTML, CSS and JavaScript. Raw WebGL, procedural geometry, local synth
 audio and local saves. No engine, CDN, remote font, runtime packages or accounts.
 
+![CorpoWars3d first-person squad view](docs/images/fps.png)
+
+*Packaged WebGL 2 build in Chromium CI using a software GPU. [Tactical view](docs/images/tactical.png) · [Exact run evidence](docs/QA_NATIVE_CI.json).*
+
 ## Play locally
 
 ```sh
