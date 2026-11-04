@@ -27,7 +27,7 @@ try{
 let mission=campaign.mission,g=createOperation(campaign,mission),playing=false,renderer=null;
 const sound=new Sound(),clock=new FixedClock({step:STEP,maxFrame:.1,maxSteps:6});
 const held=new Set();let fire=false,ads=false,lastTime=null,uiTime=0,frames=0,fps=0,fpsTime=0,hadLock=false,keyboardFallback=false,settled=false,lastHp=120;
-let background=null,mapWorld=null,lastMapPoint=null,devices=null,multipleSelection=false,mapAttack=false,pendingFire=false,pendingJump=false;
+let background=null,mapWorld=null,lastMapPoint=null,devices=null,multipleSelection=false,mapAttack=false,pendingFire=false,pendingJump=false,captureClick=false;
 const agentButtons=[],agentUI=[],worldLabels=[];
 function saveCampaign(){const ok=write(SAVE,JSON.stringify(campaign));$('saveStatus').textContent=ok?'PROGRESS SAVED ON THIS BROWSER.':'SESSION ONLY / browser storage is unavailable.';}
 function clearInput(){held.clear();fire=false;ads=false;pendingFire=false;pendingJump=false;devices?.clear();}
@@ -48,7 +48,8 @@ function setPaused(value){
   renderHUD();
 }
 function requestControl(){
-  if(!devices?.pointer||settings.keyboard||keyboardFallback||g.tactical||!playing||g.paused)return;
+  if(!devices?.pointer||settings.keyboard||keyboardFallback||g.tactical||!playing||g.paused||document.pointerLockElement===canvas)return;
+  captureClick=true;
   try{
     const p=canvas.requestPointerLock?.();
     if(p?.catch)p.catch(()=>{keyboardFallback=true;hadLock=false;});
@@ -279,7 +280,7 @@ document.addEventListener('keydown',e=>{
   if(commands[code])execute(commands[code]);if(code==='KeyR'&&reload(g))sound.play('reload');
 });
 document.addEventListener('keyup',e=>held.delete(e.code));
-function buttons(e){if(playing&&!g.paused&&!g.tactical){const down=Boolean(e.buttons&1);if(down&&!fire)pendingFire=true;fire=down;ads=Boolean(e.buttons&2);}}
+function buttons(e){if(playing&&!g.paused&&!g.tactical){if(!(e.buttons&1))captureClick=false;const down=Boolean(e.buttons&1)&&!captureClick;if(down&&!fire)pendingFire=true;fire=down;ads=Boolean(e.buttons&2);}}
 canvas.addEventListener('mousedown',e=>{if(!playing||g.paused||g.tactical)return;e.preventDefault();if(devices.pointer&&!settings.keyboard&&!keyboardFallback&&document.pointerLockElement!==canvas){requestControl();return;}buttons(e);});
 document.addEventListener('mouseup',buttons);canvas.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('mousemove',e=>{
