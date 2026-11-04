@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "environment": {
+    "node": "v24.22.1",
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V74 80-Core Processor"
+  },
+  "math": {
+    "samples": 200000,
+    "repeats": 9,
+    "native_ms": [
+      6.282456999999994,
+      5.065848000000017,
+      7.3375549999999805,
+      5.068352000000004,
+      7.0896510000000035,
+      7.433638999999999,
+      5.133289000000019,
+      5.02803099999997,
+      6.399760000000015
+    ],
+    "quake_one_newton_ms": [
+      5.329904999999997,
+      8.412060000000025,
+      8.531217999999996,
+      7.411565999999993,
+      6.112171000000018,
+      7.242061000000007,
+      7.488250999999991,
+      7.390773999999993,
+      5.884258999999986
+    ],
+    "native_median_ms": 6.282456999999994,
+    "quake_median_ms": 7.390773999999993,
+    "quake_max_relative_error": 0.0017522161878309461,
+    "selected": "native Math.sqrt",
+    "reason": "Exact native arithmetic remains authoritative. One Newton iteration introduces approximation; no game-specific accuracy budget justifies replacing hit, collision or normalization math."
+  },
+  "simulation": [
+    {
+      "mission": 1,
+      "steps": 600,
+      "samples_ms": [
+        16.58459099999999,
+        10.371055000000013,
+        10.83485300000001,
+        6.709949999999992,
+        8.538130000000024
+      ],
+      "median_ms": 10.371055000000013
+    },
+    {
+      "mission": 2,
+      "steps": 600,
+      "samples_ms": [
+        10.05105500000002,
+        8.165700000000015,
+        10.470013999999992,
+        12.839187999999979,
+        10.737465999999984
+      ],
+      "median_ms": 10.470013999999992
+    },
+    {
+      "mission": 3,
+      "steps": 600,
+      "samples_ms": [
+        13.119918999999982,
+        9.573897000000045,
+        10.951613000000009,
+        13.349755999999957,
+        17.680363
+      ],
+      "median_ms": 13.119918999999982
+    },
+    {
+      "mission": 4,
+      "steps": 600,
+      "samples_ms": [
+        13.901965000000018,
+        9.436029000000019,
+        8.00665600000002,
+        12.188819000000024,
+        9.336681000000056
+      ],
+      "median_ms": 9.436029000000019
+    },
+    {
+      "mission": 5,
+      "steps": 600,
+      "samples_ms": [
+        11.289896999999996,
+        16.484834999999975,
+        8.052048000000013,
+        7.843144000000052,
+        9.243389999999977
+      ],
+      "median_ms": 9.243389999999977
+    },
+    {
+      "mission": 6,
+      "steps": 600,
+      "samples_ms": [
+        11.740073999999936,
+        14.152233000000024,
+        10.014409,
+        10.059757999999988,
+        9.671262999999954
+      ],
+      "median_ms": 10.059757999999988
+    }
+  ],
+  "source_sha256": {
+    "src/audio.js": "025e8c7b7c4efb2e2e7bc60ff90330cf755cdf2d2687ba90738f9130f5cb0c1d",
+    "src/campaign.js": "40612ae6dd46f7b66c97b14b4e657aa995cc47cc9464b20aeca13f939444cc25",
+    "src/challenges.js": "9edf45cef7c30ef009ceeffe8fec2d843eefd1c596c8d24a1209ffea187460b0",
+    "src/city.js": "9dd89d4f825f5d1e5534da6378ac9043d35ad07fcdc77d60036b47c1b0258b25",
+    "src/fps.js": "8ca369d940daebb2e29a42122992eb2b08e4ec1d0056d650495a039777a6ef9c",
+    "src/main.js": "50bd38719788ad7e3037b50222134ac6a3a522202c6b4ae15651520c641054b2",
+    "src/math.js": "29081c85a5361b7b64a489bb88903393dcbe44a6099446a4d5adc3f708584f45",
+    "src/music.js": "73f8ba8ed4db8002be9989d4a3ea32af373c5b91d582e5061bb9b779f0338544",
+    "src/renderer.js": "638053b6f3716ba8c765d358bc4f06802079bf52b22cccd8e64f46170ad55567",
+    "src/simulation.js": "e3a95159e2662ec7420ab9137be984a00f9b7381ac19e02b614947bef8554f03",
+    "src/software-renderer.js": "d000ef2241322de37df946b377f3445dcbcf88ff305b475a9013d6e6825c088f",
+    "src/vendor/time.js": "ab52ba919ed14f34e4b04578959c06cf548a44d0162826bea227bc5faf877ac4",
+    "scripts/benchmark.js": "34e1af5fa1b3c9e474eb5929183ebe00da11c654d12567b6180e47cac5d196d4"
+  },
+  "sink": 217600.9718464393,
+  "limits": "CPU simulation and arithmetic microbenchmarks only. These do not measure native GPU rendering, frame latency, browser input, or performance on the owner desktop."
+}

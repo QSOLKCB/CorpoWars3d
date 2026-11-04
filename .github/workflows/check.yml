@@ -1,0 +1,41 @@
+name: Check packaged game
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  game:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned Python tooling
+        run: python -m pip install uv==0.13.5
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-py312-uv0135-playwright1560
+      - run: node --test tests/*.test.js
+      - run: node scripts/check.js
+      - run: node scripts/build.js
+      - name: Install CI-only Chromium
+        run: uvx --from playwright==1.56.0 playwright install --with-deps chromium
+      - name: Verify packaged native WebGL game under repository subpath
+        run: uv run --no-project --with playwright==1.56.0 python scripts/browser_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence
+          path: test-results/
+          if-no-files-found: ignore

@@ -1,0 +1,33 @@
+CorpoWars3d
+Copyright 2026 QSOL-IMC / Trent Slade and contributors.
+Distributed under the Apache License, Version 2.0; see LICENSE.
+
+CorpoWars3d is an original single-player tactical FPS adaptation of QSOLKCB/CorpoWars.
+Its simulation, campaign, challenges, fictional setting and squad profiles derive
+from CorpoWars at 815b609cd6c2eb5c789a78ebe3e91d0438807b79, Apache-2.0.
+src/simulation.js is modified to hand a piloted agent's movement and trigger to
+the FPS adapter, apply control before objective evaluation and reject direct
+motion for stationary interactions. Campaign and challenge data retain the
+original rules.
+
+src/vendor/time.js is QSOLKCB/VANILLAJS's FixedClock, Apache-2.0, at
+1f965f4e5b6669de0f954e3a39b11aa679e56720.
+The new renderer adapts its retained-buffer capacity pattern and credits the
+invariant-driven reuse concepts in QSOLKCB/OPT at
+7556dd36acd53ed3ed538fd03b1db44e5c1ec869. No OPT donor source is copied.
+
+src/math.js, src/audio.js and src/music.js derive from QSOLKCB/QUICKSCOPER,
+Apache-2.0, at 7c406e2545d82ee6bdc5fda5f198eb22fa183a84.
+QUICKSCOPER's original raw WebGL pipeline and fixed-step FPS input boundaries
+were consulted. The instanced city renderer, squad adapter and interface are new.
+
+VANILLAJS and CorpoWars source notices credit rendering reuse to OPT's invariant/
+signature concepts; no Wonderbuild or GPL donor source is copied. QUICKSCOPER
+includes only original JavaScript, procedural geometry and synthesised audio.
+
+Syndicate and FreeSynd are acknowledged solely as genre inspiration.
+No source code, game data, graphics, maps, music, samples, fonts, characters,
+or trademarks from those projects are included as game assets.
+This independent project is not affiliated with or endorsed by Electronic Arts,
+Bullfrog or the FreeSynd contributors. All city geometry and sign textures are
+generated locally; all audio is synthesised locally. No external assets are used.
