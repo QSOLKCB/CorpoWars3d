@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import threading
 from playwright.sync_api import sync_playwright
+from device_smoke import run_device_checks
 
 ROOT = Path(__file__).resolve().parent.parent
 PREFIX = "/CorpoWars3d/"
@@ -138,11 +139,12 @@ try:
         page.wait_for_function("window.corpowarsQA !== undefined")
         assert page.locator("#menu").is_visible()
         assert not errors, errors
+        device_checks = run_device_checks(browser, f"http://127.0.0.1:{server.server_port}{PREFIX}?qa", out)
         result = {"passed": True, "renderer": telemetry, "page_errors": errors,
                   "checks": ["native WebGL shaders", "repository subpath", "deploy", "agent switch", "tactical all-AI",
                              "map movement", "hold and fire orders", "pause freeze", "paused tactical selection and orders",
                              "paused direct-input cancellation", "paused view transition", "manual fire and reload",
-                             "overlapping mouse buttons", "static upload retention", "blur cancellation", "offline reload"]}
+                             "overlapping mouse buttons", "static upload retention", "blur cancellation", "offline reload"] + device_checks}
         (out / "browser.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result, indent=2))
         context.close()

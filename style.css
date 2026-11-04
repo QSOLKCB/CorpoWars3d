@@ -7,3 +7,55 @@
 @media(max-height:750px){.masthead{height:65px}.menu-layout{padding:24px 0}.title-block h1{font-size:min(9vw,105px);margin:24px 0}.tagline{font-size:18px;margin-top:20px}.hero-caption{font-size:10px}.hero-rule{margin:17px 0}.desktop-note{margin-top:20px}.briefing{max-height:calc(100vh - 130px)}.tab-content{padding:17px}.tabs button{padding:15px 4px}.mission-button{padding:10px 7px}.mission-detail{margin-top:14px;padding-top:13px}.mission-detail h2{font-size:23px}.mission-detail>p:not(.eyebrow){font-size:12px}.menu-footer{padding:14px 0}.tactical{top:85px;bottom:200px;padding:14px 18px}.tactical-heading{margin-bottom:9px}.tactical h2{font-size:18px}.map-legend{font-size:10px}.agent{padding:8px}.mini-map{width:140px}.mini-map canvas{width:122px;height:122px}.weapon-readout strong{font-size:30px}.bottom-hud{bottom:35px}.quick-help{bottom:12px}}
 @media(max-width:760px){.menu-layout{grid-template-columns:1fr;width:90vw;gap:25px}.title-block h1{font-size:80px;margin:20px 0}.title-block .tagline,.hero-rule,.hero-caption,.desktop-note{display:none}.title-block .eyebrow{font-size:8px}.briefing{max-height:none}.menu{overflow:auto}.masthead{height:65px}.masthead>span:not(.edition){display:none}.menu-footer span:not(:first-child){display:none}.squad{gap:3px}.agent{min-width:60px}.agent .role{font-size:7px}.agent .agent-bottom{font-size:6px}.mini-map,.weapon-readout{display:none}.objective{width:220px}.telemetry{display:none}.hud-brand{font-size:14px}.hud-brand small{font-size:7px}.bottom-hud{left:10px;right:10px}.quick-help{gap:9px;left:10px;font-size:6px}.tactical{left:10px;right:10px;bottom:195px;padding:12px}.map-legend{display:none}.tactical h2{font-size:14px}.tactical-heading button{font-size:7px;padding:8px}.log{left:15px;max-width:240px;font-size:8px}.command-bar{gap:3px}.command-bar button{padding:9px 7px;font-size:7px}.research-list{grid-template-columns:1fr 1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}.grain{display:none}}
+/* Device controls share the existing squad interface and never cover the map. */
+.tactical-tools{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;flex-shrink:0}
+.tactical-tools button{font-size:9px;padding:10px}button[aria-pressed=true]{border-color:var(--gold)}
+.touch-controls{position:absolute;inset:0;pointer-events:none;user-select:none;-webkit-user-select:none}
+.touch-controls [data-touch],.touch-controls button{touch-action:none;pointer-events:auto;-webkit-touch-callout:none}
+.touch-controls button{min-width:48px;min-height:44px;font-size:10px;background:#142126dd;border-color:#758c8e99}
+.touch-controls .pressed{background:#526052dd;border-color:var(--gold)}
+.move-pad{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:65px;width:126px;height:126px;border:1px solid #b9d8cc66;border-radius:50%;background:#10202955;display:grid;place-items:center}
+.move-pad span{font:8px var(--mono);color:#c3d2cb88;position:absolute;top:15px}
+.move-pad i{width:46px;height:46px;border:1px solid #d6e5d4aa;background:#a3c2b144;border-radius:50%;pointer-events:none}
+.look-pad{position:absolute;right:168px;bottom:65px;width:calc(50% - 168px);min-width:80px;height:170px;border:1px dashed #a7c2be33;border-radius:16px;background:#12232b0a}
+.look-pad span{position:absolute;bottom:12px;width:100%;text-align:center;font:8px var(--mono);color:#bdcec777;pointer-events:none}
+.touch-combat{position:absolute;right:max(10px,env(safe-area-inset-right));bottom:65px;display:grid;grid-template-columns:repeat(2,70px);gap:6px}
+.touch-combat .touch-fire{min-height:62px;color:var(--gold);border-color:var(--gold)}
+.touch-navigation{position:absolute;bottom:max(10px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:7px;white-space:nowrap}
+body.touch-mode .quick-help,body.touch-mode .mini-map,body.touch-mode .log{display:none}
+body.touch-mode .hud-top{padding:10px max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left));gap:10px}
+body.touch-mode .hud-brand small{display:none}body.touch-mode .telemetry{display:none}
+body.touch-mode .objective{width:min(60vw,320px);margin-right:52px}body.touch-mode .objective strong{font-size:10px;margin-top:4px}
+body.touch-mode .pause-button{top:10px;right:max(10px,env(safe-area-inset-right));width:44px;height:44px}
+body.touch-mode:not(.tactical-mode) .bottom-hud{top:67px;bottom:auto;left:10px;right:10px;align-items:flex-start}
+body.touch-mode .squad-heading{display:none}body.touch-mode .agent{min-width:0;min-height:44px;padding:7px 6px}
+body.touch-mode .agent .role{display:none}body.touch-mode .agent .name{font-size:10px}body.touch-mode .agent .number{font-size:8px}
+body.touch-mode .agent .hp-bar{margin:5px 0}body.touch-mode .agent .agent-bottom{font-size:7px}
+body.touch-mode:not(.tactical-mode) .command-bar{display:none}
+body.touch-mode .weapon-readout{display:block;min-width:68px;padding:0;font-size:9px}
+body.touch-mode .weapon-readout strong{font-size:25px}body.touch-mode .weapon-readout>small{font-size:8px}body.touch-mode .weapon-readout>span{display:none}
+body.touch-mode .aim-info{white-space:normal;width:70%;font-size:8px}
+body.touch-mode .tactical{inset:65px max(8px,env(safe-area-inset-right)) 175px max(8px,env(safe-area-inset-left));padding:8px}
+body.touch-mode .tactical h2,body.touch-mode .tactical-heading .eyebrow,body.touch-mode .map-legend{display:none}
+body.touch-mode .tactical-heading{justify-content:flex-end;margin-bottom:5px}body.touch-mode .tactical-heading button{min-height:38px}
+body.touch-mode .tactical-tools{gap:4px;margin-bottom:5px}body.touch-mode .tactical-tools button{min-height:38px;padding:6px;font-size:8px;flex:1}
+body.touch-mode.tactical-mode .bottom-hud{bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:8px}
+body.touch-mode.tactical-mode .command-bar{display:grid;grid-template-columns:repeat(5,1fr)}
+body.touch-mode .command-bar button{min-height:42px;padding:6px;font-size:8px}body.touch-mode kbd{display:none}
+body.touch-mode .map-area{min-height:0;overflow:hidden}.touch-mode #tacticalMap{touch-action:none;max-width:100%}
+body.controller-mode .quick-help{font-size:0}body.controller-mode .quick-help::after{content:'LS MOVE · RS AIM · RT FIRE · LT ADS · Y AGENT · LB MAP · RB FOLLOW · MENU PAUSE';font-size:9px}
+@media(max-width:540px){body.touch-mode .look-pad{right:10px;bottom:235px;width:43%;height:145px}body.touch-mode .touch-combat{bottom:65px}body.touch-mode .move-pad{bottom:85px;width:116px;height:116px}.pause-panel{max-height:95dvh;overflow:auto;padding:20px}.map-area>canvas{max-width:100%}.tactical-tools button{padding:8px 4px;font-size:8px}.masthead{padding-top:env(safe-area-inset-top)}}
+@media(max-height:540px) and (min-width:541px){
+  body.touch-mode .move-pad{width:112px;height:112px;bottom:58px}body.touch-mode .touch-combat{grid-template-columns:repeat(3,58px);bottom:58px;gap:4px}body.touch-mode .touch-combat button{font-size:8px;padding:7px}body.touch-mode .look-pad{right:200px;bottom:58px;width:22%;height:120px}
+  body.touch-mode .tactical{inset:58px 8px 63px;padding:5px 8px;display:grid;grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr;gap:4px}
+  body.touch-mode .tactical-heading{grid-column:1;margin:0}body.touch-mode .tactical-tools{grid-column:1;grid-row:2;display:grid;grid-template-columns:1fr 1fr;align-content:start}
+  body.touch-mode .map-area{grid-column:2;grid-row:1/3}body.touch-mode.tactical-mode .bottom-hud{left:8px;right:8px;bottom:5px}
+  body.touch-mode.tactical-mode .squad-side{display:flex;gap:6px;max-width:100%}body.touch-mode.tactical-mode .squad{width:37%;align-items:stretch}body.touch-mode.tactical-mode .command-bar{margin:0;flex:1;grid-template-columns:repeat(5,1fr);gap:3px}
+  body.touch-mode.tactical-mode .command-bar button{min-height:24px;font-size:7px;padding:4px}body.touch-mode.tactical-mode .agent .agent-bottom{display:none}
+  .touch-mode .menu-layout{grid-template-columns:1fr;width:min(90vw,620px);padding:15px 0}.touch-mode .title-block{display:none}.touch-mode .briefing{max-height:none}.touch-mode .menu-footer{display:none}
+}
+
+body.touch-mode .tactical-heading #tacticalFeed{display:block;font-size:9px;margin:0;color:var(--gold)}
+body.touch-mode .tactical-heading{justify-content:space-between}
+body.touch-mode.tactical-mode .weapon-readout{display:none}
+.device-hint{position:absolute;top:125px;left:50%;transform:translateX(-50%);background:#111c23e8;border:1px solid var(--gold);padding:10px;font:10px var(--mono);color:var(--gold)}

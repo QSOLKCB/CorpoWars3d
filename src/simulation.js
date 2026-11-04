@@ -172,6 +172,43 @@ function guard(id, x, y, difficulty = DIFFICULTIES.relaxed, enemyType = 'guard')
     cooldown: .8, path: [], target: null, think: 0, stun: 0, fear: 0, patrol: 0 };
 }
 
+// Extra city encounters are deterministic and finite. Existing squad/combat AI
+// stays authoritative; only these patrols get a longer two-stop street route.
+function streetPoints(game){
+  const points=[];
+  for(const y of [2.5,11.5,20.5,29.5])for(const x of [2.5,11.5,20.5,29.5])points.push({x,y});
+  const rng=random(game.world.seed+7919);
+  for(let i=points.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[points[i],points[j]]=[points[j],points[i]];}
+  return points;
+}
+function addCityPatrols(game){
+  const count=game.difficulty.name==='Hostile'?12:8,used=new Set(game.guards.map(e=>Math.floor(e.y)*game.world.size+Math.floor(e.x)));
+  for(const p of streetPoints(game)){
+    if(game.cityPatrols>=count)break;
+    const at=nearestWalkable(game.world,p.x,p.y,used);
+    if(!at||game.agents.some(a=>distance(a,at)<13))continue;
+    const type=game.missionIndex>0&&game.cityPatrols%4===3?'marksman':'guard';
+    const e=guard(600+game.cityPatrols,at.x,at.y,game.difficulty,type);
+    const candidates=[{x:at.x+6,y:at.y},{x:at.x,y:at.y+6},{x:at.x-6,y:at.y},{x:at.x,y:at.y-6}];
+    const other=candidates.find(q=>walkable(game.world,q.x,q.y)&&game.agents.every(a=>distance(a,q)>=12)&&lineOfSight(game.world,at,q));
+    if(!other)continue;
+    e.route=[{...at},other];e.path=findPath(game.world,e,other);e.patrol=1;
+    used.add(Math.floor(at.y)*game.world.size+Math.floor(at.x));game.guards.push(e);game.cityPatrols++;
+  }
+}
+function relayResponse(game){
+  if(game.relayResponseSent)return;game.relayResponseSent=true;
+  const living=game.agents.filter(a=>a.hp>0),limit=game.difficulty.name==='Hostile'?6:4;
+  let added=0;
+  for(const p of streetPoints(game)){
+    if(added>=limit)break;
+    if(!walkable(game.world,p.x,p.y)||living.some(a=>distance(a,p)<10||lineOfSight(game.world,a,p))||game.guards.some(e=>e.hp>0&&distance(e,p)<1))continue;
+    const e=guard(700+added,p.x,p.y,game.difficulty,added===limit-1?'bulwark':'guard');
+    e.path=findPath(game.world,e,game.relay);game.guards.push(e);added++;
+  }
+  if(added)message(game,`Relay breach detected. ${added} response units entering the district.`, 'danger');
+}
+
 export function objectiveDuration(game,key) {
   return key==='relay'?(game.mission.relayDuration??3):key==='vault'?(game.mission.vaultDuration??5):2;
 }
@@ -201,11 +238,11 @@ export function createGame(seed, campaign = createCampaign(), missionIndex = cam
     relay: point(mission.relay), vault: point(mission.vault), exit: point(mission.exit),
     medkits: upgrades.includes('med2')?4:2, healAmount: upgrades.includes('med2')?110:upgrades.includes('med1')?85:55,
     hackSpeed: upgrades.includes('head')?1.3:1,
-    panicEnabled: false, panicCooldown: 0, panicRange: upgrades.includes('panic1')?9:7,
+    panicActive: 0, panicCooldown: 0, panicRange: upgrades.includes('panic1')?9:7,
     panicDuration: (upgrades.includes('panic2')?11:upgrades.includes('panic1')?8:5)*difficulty.fearScale,
     panicRecharge: upgrades.includes('panic2')?14:upgrades.includes('panic1')?18:24,
     pulses: 2, kills: 0, effects: [], events: [], log: [], extraction: 0, alert: 0,
-    metrics:{medkitsUsed:0,empsUsed:0,panicBursts:0},
+    metrics:{medkitsUsed:0,empsUsed:0,panicBursts:0},cityPatrols:0,relayResponseSent:false,
     holdContested:false,holdWavesSpawned:(mission.waves??[]).map(()=>false),
     lockdownRemaining:null,escortFollowing:false,escortAgents:[],escortThink:0,
   };
@@ -217,6 +254,7 @@ export function createGame(seed, campaign = createCampaign(), missionIndex = cam
     const anchor=i<2?game.relay:game.vault,point=nearestWalkable(world,anchor.x+(i%2?2:-2),anchor.y+1,occupied);
     if(point){occupied.add(Math.floor(point.y)*world.size+Math.floor(point.x));game.guards.push(guard(150+i,point.x,point.y,difficulty));}
   }
+  addCityPatrols(game);
   for(const a of game.agents)configureWeapon(a,upgrades);
   return game;
 }
@@ -314,10 +352,20 @@ export function cycleMode(game) {
   }
   if(changed)message(game,'AUG conversion selected. Reloading.','order');return changed;
 }
-export function togglePanic(game) {
-  if(game.phase!=='active')return false;
-  game.panicEnabled=!game.panicEnabled;
-  message(game,game.panicEnabled?'Panic field armed. Visible hostiles will fall back.':'Panic field disengaged.');return true;
+export function activatePanic(game) {
+  if(game.phase!=='active'||game.paused||game.panicCooldown>0)return false;
+  const sources=game.agents.filter(a=>a.hp>0&&game.selected.has(a.id));
+  if(!sources.length)return false;
+  const affected=game.guards.filter(e=>e.hp>0&&sources.some(a=>distance(a,e)<=game.panicRange&&lineOfSight(game.world,a,e)));
+  for(const e of affected){e.fear=game.panicDuration;e.path=retreatPath(game.world,e,sources);e.target=null;}
+  // A manual burst snapshots its targets once. Recharge starts after its full
+  // duration, guaranteeing downtime even with difficulty/research modifiers.
+  game.panicActive=game.panicDuration;
+  game.panicCooldown=game.panicDuration+game.panicRecharge;
+  game.metrics.panicBursts++;
+  for(const a of sources)game.effects.push({type:'panic',x:a.x,y:a.y,life:1,maxLife:1});
+  message(game,`Panic burst: ${affected.length} hostile${affected.length===1?'':'s'} falling back. Recharge follows the burst.`, 'panic');
+  return true;
 }
 
 // A bounded flood fill chooses a reachable retreat. Walls cannot trap AI in an
@@ -340,15 +388,7 @@ export function retreatPath(world, unit, sources) {
 }
 function updatePanic(game,dt) {
   game.panicCooldown=Math.max(0,game.panicCooldown-dt);
-  if(!game.panicEnabled||game.panicCooldown>0)return;
-  const sources=game.agents.filter(a=>a.hp>0&&game.selected.has(a.id));
-  const affected=game.guards.filter(e=>e.hp>0&&sources.some(a=>distance(a,e)<=game.panicRange&&lineOfSight(game.world,a,e)));
-  if(!affected.length)return;
-  for(const e of affected){e.fear=game.panicDuration;e.path=retreatPath(game.world,e,sources);e.target=null;}
-  game.panicCooldown=game.panicRecharge;
-  game.metrics.panicBursts++;
-  for(const a of sources)game.effects.push({type:'panic',x:a.x,y:a.y,life:1,maxLife:1});
-  message(game,`${affected.length} hostile${affected.length===1?'':'s'} falling back.`, 'panic');
+  game.panicActive=Math.max(0,game.panicActive-dt);
 }
 
 function move(unit, dt, multiplier = 1) {
@@ -443,7 +483,8 @@ export function tick(game, dt = STEP, applyControl = null) {
         if (target) e.path = findPath(world, e, target);
         else if (!e.path.length) {
           e.patrol = (e.patrol + 1) % 2;
-          const dest = nearestWalkable(world, e.home.x + e.patrol * 2, e.home.y);
+          const waypoint=e.route?.[e.patrol];
+          const dest = waypoint??nearestWalkable(world, e.home.x + e.patrol * 2, e.home.y);
           if (dest) e.path = findPath(world, e, dest);
         }
       }
@@ -463,6 +504,7 @@ export function tick(game, dt = STEP, applyControl = null) {
     channel(game.relay, objectiveDuration(game,'relay'));
     if (game.relay.done) {
       message(game, `${game.mission.labels[0]} disabled. Next objective unlocked.`, 'objective');
+      relayResponse(game);
       if(game.mission.kind==='lockdown'){
         game.lockdownRemaining=game.mission.lockdown[game.difficulty.name.toLowerCase()];
         message(game,`Lockdown initiated. ${game.lockdownRemaining} seconds to seize the reserve and extract.`,'danger');

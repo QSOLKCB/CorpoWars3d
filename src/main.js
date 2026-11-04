@@ -6,9 +6,10 @@ import {visibleGuard,lineOfSight} from './simulation.js';
 import {createOperation,activeAgent,switchAgent,nextAgent,setTactical,selectSquad,command,objective,update,look,reload,SCALE,STEP,COLORS} from './fps.js';
 import {Renderer} from './renderer.js';
 import {Sound} from './audio.js';
-const $=id=>document.getElementById(id),canvas=$('viewport');
+import {Devices} from './devices.js';
+const nodes=new Map(),$=id=>nodes.get(id)||(nodes.set(id,document.getElementById(id)),nodes.get(id)),canvas=$('viewport');
 const SAVE='corpowars3d-campaign-v1',OPTIONS='corpowars3d-settings-v1';
-const defaults={quality:'high',sensitivity:1,invert:false,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,keyboard:false,volume:.45,musicVolume:.15};
+const defaults={touchControls:'auto',controllerSensitivity:1,touchSensitivity:1,deadzone:.16,quality:matchMedia('(pointer: coarse)').matches?'balanced':'high',sensitivity:1,invert:false,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,keyboard:false,volume:.45,musicVolume:.15};
 function read(key){try{return localStorage.getItem(key);}catch{return null;}}
 function write(key,value){try{localStorage.setItem(key,value);return true;}catch{return false;}}
 const campaign=decodeCampaign(read(SAVE))||createCampaign(),settings={...defaults};
@@ -17,16 +18,19 @@ try{
   if(s&&typeof s==='object')for(const key of Object.keys(defaults)){
     if(typeof defaults[key]==='boolean'&&typeof s[key]==='boolean')settings[key]=s[key];
     else if(key==='quality'&&['high','balanced','low'].includes(s[key]))settings[key]=s[key];
-    else if(['sensitivity','volume','musicVolume'].includes(key)&&Number.isFinite(s[key]))settings[key]=Math.max(key==='sensitivity'?.5:0,Math.min(key==='sensitivity'?2.5:1,s[key]));
+    else if(key==='touchControls'&&['auto','on','off'].includes(s[key]))settings[key]=s[key];
+    else if(['sensitivity','controllerSensitivity','touchSensitivity','deadzone','volume','musicVolume'].includes(key)&&Number.isFinite(s[key])){
+      const sensitivity=key.toLowerCase().includes('sensitivity');settings[key]=Math.max(sensitivity?.5:key==='deadzone'?.05:0,Math.min(sensitivity?2.5:key==='deadzone'?.35:1,s[key]));
+    }
   }
 }catch{/* Optional settings never block the game. */}
 let mission=campaign.mission,g=createOperation(campaign,mission),playing=false,renderer=null;
 const sound=new Sound(),clock=new FixedClock({step:STEP,maxFrame:.1,maxSteps:6});
 const held=new Set();let fire=false,ads=false,lastTime=null,uiTime=0,frames=0,fps=0,fpsTime=0,hadLock=false,keyboardFallback=false,settled=false,lastHp=120;
-let background=null,mapWorld=null,lastMapPoint=null;
-const agentButtons=[],worldLabels=[];
+let background=null,mapWorld=null,lastMapPoint=null,devices=null,multipleSelection=false,mapAttack=false,pendingFire=false,pendingJump=false,captureClick=false;
+const agentButtons=[],agentUI=[],worldLabels=[];
 function saveCampaign(){const ok=write(SAVE,JSON.stringify(campaign));$('saveStatus').textContent=ok?'PROGRESS SAVED ON THIS BROWSER.':'SESSION ONLY / browser storage is unavailable.';}
-function clearInput(){held.clear();fire=false;ads=false;}
+function clearInput(){held.clear();fire=false;ads=false;pendingFire=false;pendingJump=false;devices?.clear();}
 function syncPauseUI(){
   if(g.phase!=='active')return;
   const planning=g.paused&&g.tactical;
@@ -34,7 +38,7 @@ function syncPauseUI(){
   $('pauseButton').textContent=g.paused?'▶':'Ⅱ';
   $('pauseButton').setAttribute('aria-label',g.paused?'Resume game':'Pause game');
   $('tacticalFeed').textContent=planning?'PAUSED / ORDERS QUEUED':'LIVE TACTICAL FEED';
-  $('returnFPS').querySelector('kbd').textContent=planning?'M':'TAB';
+  $('returnFPS').querySelector('kbd').textContent=planning?'M':'TAB';devices?.refresh();
 }
 function setPaused(value){
   if(!playing||g.phase!=='active')return;
@@ -44,7 +48,8 @@ function setPaused(value){
   renderHUD();
 }
 function requestControl(){
-  if(settings.keyboard||keyboardFallback||g.tactical||!playing||g.paused)return;
+  if(!devices?.pointer||settings.keyboard||keyboardFallback||g.tactical||!playing||g.paused||document.pointerLockElement===canvas)return;
+  captureClick=true;
   try{
     const p=canvas.requestPointerLock?.();
     if(p?.catch)p.catch(()=>{keyboardFallback=true;hadLock=false;});
@@ -55,6 +60,7 @@ function tactical(value=!g.tactical){
   if(!playing||g.phase!=='active')return;
   clearInput();setTactical(g,value);$('tactical').hidden=!value;document.body.classList.toggle('tactical-mode',value);
   syncPauseUI();
+  if(value){lastMapPoint={x:activeAgent(g).x,y:activeAgent(g).y};devices.cursor={...lastMapPoint};}
   if(value)document.exitPointerLock?.();else if(!g.paused)requestControl();
   renderHUD();
 }
@@ -75,7 +81,7 @@ function startMission(){
 function headquarters(){
   playing=false;g.paused=true;clock.setPaused(true);clearInput();sound.stopMusic();document.exitPointerLock?.();
   $('menu').hidden=false;$('hud').hidden=true;$('pause').hidden=true;document.body.classList.remove('tactical-mode');
-  mission=campaign.mission;renderHQ();
+  mission=campaign.mission;devices?.refresh();renderHQ();
 }
 function complete(){
   if(settled)return;settled=true;g.paused=true;clock.setPaused(true);clearInput();document.exitPointerLock?.();sound.stopMusic();
@@ -84,7 +90,7 @@ function complete(){
   else sound.play('end');
   $('pauseTitle').textContent=g.phase==='won'?'CONTRACT CLOSED.':'LINK TERMINATED.';
   $('pauseText').textContent=g.phase==='won'?`${g.agents.filter(a=>a.hp>0).length} agents extracted. ${g.kills} security units neutralised. ${reward?`${reward.toLocaleString()} credits transferred.`:'Contract already paid.'}`:g.log[0]?.text||'All agents have been lost.';
-  $('resume').hidden=false;$('resume').firstChild.textContent='RETURN TO HEADQUARTERS ';$('pause').hidden=false;
+  $('resume').hidden=false;$('resume').firstChild.textContent='RETURN TO HEADQUARTERS ';$('pause').hidden=false;devices?.refresh();
 }
 function renderHQ(){
   $('credits').textContent=campaign.cash.toLocaleString()+' CR';$('armoryCredits').textContent=campaign.cash.toLocaleString()+' CR';
@@ -128,9 +134,9 @@ function makeSquad(){
     b.title=`Switch to ${a.name}. In tactical view, click to select; Shift-click adds or removes.`;
     b.addEventListener('click',e=>{
       if(g.agents[a.id].hp<=0)return;
-      if(g.tactical){const ids=e.shiftKey?new Set(g.selected):new Set();if(ids.has(a.id))ids.delete(a.id);else ids.add(a.id);selectSquad(g,[...ids]);renderHUD();}
+      if(g.tactical){const ids=e.shiftKey||multipleSelection?new Set(g.selected):new Set();if(ids.has(a.id))ids.delete(a.id);else ids.add(a.id);selectSquad(g,[...ids]);renderHUD();}
       else switchTo(a.id);
-    });b.addEventListener('dblclick',()=>{if(g.tactical)switchTo(a.id);});$('squad').append(b);agentButtons.push(b);
+    });b.addEventListener('dblclick',()=>{if(g.tactical)switchTo(a.id);});$('squad').append(b);agentButtons.push(b);agentUI.push({hp:b.querySelector('.hp-bar i'),line:b.querySelector('.agent-bottom')});
   }
   for(let i=0;i<5;i++){const label=document.createElement('div');label.className='world-label'+(i===4?' objective-label':'');$('worldLabels').append(label);worldLabels.push(label);}
 }
@@ -141,8 +147,8 @@ function renderHUD(){
   $('squadCount').textContent=String(living).padStart(2,'0')+' ONLINE';$('selectionInfo').textContent=g.selected.size===living?'ALL SELECTED':g.selected.size+' SELECTED';
   for(const u of g.agents){
     const b=agentButtons[u.id];b.disabled=u.hp<=0;b.classList.toggle('active',u.id===g.viewId);b.classList.toggle('selected',g.selected.has(u.id));b.classList.toggle('dead',u.hp<=0);
-    b.querySelector('.hp-bar i').style.width=Math.max(0,u.hp/u.maxHp*100)+'%';
-    const line=b.querySelector('.agent-bottom');line.children[0].textContent=Math.ceil(u.hp)+' HP';line.children[1].textContent=u.hp<=0?'OFFLINE':g.controlled===u.id?'DIRECT LINK':'AI / '+u.command;
+    agentUI[u.id].hp.style.width=Math.max(0,u.hp/u.maxHp*100)+'%';
+    const line=agentUI[u.id].line;line.children[0].textContent=Math.ceil(u.hp)+' HP';line.children[1].textContent=u.hp<=0?'OFFLINE':g.controlled===u.id?'DIRECT LINK':'AI / '+u.command;
     b.setAttribute('aria-label',`${u.name}, ${Math.ceil(u.hp)} HP, ${u.id===g.controlled?'directly controlled':u.command}`);b.setAttribute('aria-pressed',String(g.tactical?g.selected.has(u.id):g.viewId===u.id));
   }
   $('weaponName').textContent=WEAPONS[a.weapon].name.toUpperCase();$('ammo').textContent=String(a.ammo).padStart(2,'0');$('magazine').textContent='/ '+a.magazine;
@@ -151,11 +157,11 @@ function renderHUD(){
   $('stats').textContent=`${fps} FPS / ${renderer.software?'SOFTWARE':renderer.instanced?'INSTANCED':'WEBGL COMPATIBILITY'} / ${Math.floor(g.time/60)}:${String(Math.floor(g.time%60)).padStart(2,'0')}`;
   for(const b of document.querySelectorAll('[data-command]')){
     const kind=b.dataset.command;
-    b.disabled=(kind==='escort'&&!g.courier?.active)||(kind==='mode'&&![...g.selected].some(id=>g.agents[id]?.weapon==='aug'))||(g.paused&&['heal','emp'].includes(kind));
+    b.disabled=(kind==='escort'&&!g.courier?.active)||(kind==='mode'&&![...g.selected].some(id=>g.agents[id]?.weapon==='aug'))||(g.paused&&['heal','emp','panic'].includes(kind))||(kind==='panic'&&g.panicCooldown>0);
     if(kind==='fire')b.lastChild.textContent=g.holdFire?' HOLD FIRE':' WEAPONS FREE';
     if(kind==='emp')b.lastChild.textContent=' EMP / '+g.pulses;
     if(kind==='heal')b.lastChild.textContent=' PATCH / '+g.medkits;
-    if(kind==='panic')b.lastChild.textContent=g.panicEnabled?' PANIC ON':' PANIC';
+    if(kind==='panic')b.lastChild.textContent=g.panicActive>0?' PANIC / ACTIVE '+Math.ceil(g.panicActive)+'s':g.panicCooldown>0?' PANIC / '+Math.ceil(g.panicCooldown)+'s':' PANIC / READY';
   }
   const signature=g.log.map(e=>e.time+e.text).join('|');
   if($('log').dataset.signature!==signature){$('log').dataset.signature=signature;$('log').replaceChildren();for(const l of g.log.slice(0,3)){const p=document.createElement('p');p.textContent=l.text;$('log').append(p);}}
@@ -164,14 +170,14 @@ function renderHUD(){
 }
 function labels(){
   if(!playing||g.tactical)return;
-  const a=activeAgent(g);
+  const a=activeAgent(g),goal=objective(g);
   for(let i=0;i<5;i++){
-    const u=i===4?objective(g).point:g.agents[i],label=worldLabels[i];
+    const u=i===4?goal.point:g.agents[i],label=worldLabels[i];
     const visible=i===4||i!==g.viewId&&u.hp>0&&lineOfSight(g.world,a,u);
     const point=visible?renderer.project([u.x*SCALE,i===4?3.1:2.2+(u.elevation||0),u.y*SCALE]):null;
     label.hidden=!point;if(!point)continue;label.style.left=point[0]+'px';label.style.top=point[1]+'px';
-    label.textContent=i===4?g.mission.labels[objective(g).key==='relay'?0:1]||'EXTRACTION':u.name;
-    if(i===4&&objective(g).key==='exit')label.textContent='EXTRACTION';
+    const text=i===4?(goal.key==='exit'?'EXTRACTION':g.mission.labels[goal.key==='relay'?0:1]):u.name;
+    if(label.textContent!==text)label.textContent=text;
   }
   $('hitMarker').hidden=g.hit<=0;
   if(a.hp<lastHp)$('damage').style.boxShadow='inset 0 0 130px #d3483466';else $('damage').style.boxShadow='inset 0 0 130px #c2393000';lastHp=a.hp;
@@ -191,6 +197,10 @@ function drawMap(canvas,large=false){
   for(const a of g.agents)if(a.hp>0&&a.path.length){
     c.strokeStyle=g.selected.has(a.id)?'#75d6c780':'#75d6c730';c.lineWidth=2;c.beginPath();c.moveTo(pad+a.x*s,pad+a.y*s);
     for(const p of a.path)c.lineTo(pad+p.x*s,pad+p.y*s);c.stroke();
+  }
+  if(large&&lastMapPoint){
+    const x=pad+lastMapPoint.x*s,y=pad+lastMapPoint.y*s;
+    c.strokeStyle=mapAttack?'#f17e68':'#ecb66d';c.lineWidth=2;c.beginPath();c.arc(x,y,13,0,Math.PI*2);c.moveTo(x-19,y);c.lineTo(x+19,y);c.moveTo(x,y-19);c.lineTo(x,y+19);c.stroke();
   }
   const current=objective(g);
   for(const key of ['relay','vault','exit']){
@@ -221,7 +231,8 @@ for(const b of document.querySelectorAll('[data-tab]'))b.addEventListener('click
 for(const key of Object.keys(defaults)){
   const el=$(key);if(!el)continue;if(typeof defaults[key]==='boolean')el.checked=settings[key];else el.value=settings[key];
   el.addEventListener('input',()=>{
-    settings[key]=typeof defaults[key]==='boolean'?el.checked:key==='quality'?el.value:Number(el.value);
+    settings[key]=typeof defaults[key]==='boolean'?el.checked:['quality','touchControls'].includes(key)?el.value:Number(el.value);
+    if(key==='touchControls'){clearInput();devices.refresh();}
     write(OPTIONS,JSON.stringify(settings));sound.setVolume(settings.volume);sound.setMusicVolume(settings.musicVolume);
   });
 }
@@ -233,12 +244,16 @@ $('selectAll').addEventListener('click',()=>{selectSquad(g,g.agents.map(a=>a.id)
 $('selectCurrent').addEventListener('click',()=>{selectSquad(g,[g.viewId]);renderHUD();});
 for(const b of document.querySelectorAll('[data-command]'))b.addEventListener('click',()=>execute(b.dataset.command));
 $('tacticalMap').addEventListener('mousemove',e=>{lastMapPoint=mapPoint(e);});
-$('tacticalMap').addEventListener('click',e=>{lastMapPoint=mapPoint(e);command(g,'move',lastMapPoint);sound.play('scope');renderHUD();});
-$('tacticalMap').addEventListener('contextmenu',e=>{
-  e.preventDefault();const p=mapPoint(e);let target=null;
-  for(const enemy of g.guards)if(visibleGuard(g,enemy)&&Math.hypot(enemy.x-p.x,enemy.y-p.y)<.9&&(!target||Math.hypot(enemy.x-p.x,enemy.y-p.y)<Math.hypot(target.x-p.x,target.y-p.y)))target=enemy;
-  if(target){command(g,'attack',target);sound.play('scope');renderHUD();}
-});
+function attackAt(p){
+  let target=null,best=.9*.9;
+  for(const enemy of g.guards){const d=(enemy.x-p.x)**2+(enemy.y-p.y)**2;if(d<best&&visibleGuard(g,enemy)){target=enemy;best=d;}}
+  if(target&&command(g,'attack',target)){sound.play('scope');renderHUD();}
+}
+$('tacticalMap').addEventListener('click',e=>{lastMapPoint=mapPoint(e);if(mapAttack)attackAt(lastMapPoint);else execute('move');});
+$('tacticalMap').addEventListener('contextmenu',e=>{e.preventDefault();attackAt(mapPoint(e));});
+$('selectMultiple').addEventListener('click',()=>{multipleSelection=!multipleSelection;$('selectMultiple').setAttribute('aria-pressed',String(multipleSelection));});
+$('pilotSelected').addEventListener('click',()=>{const id=[...g.selected].find(id=>g.agents[id].hp>0);if(id!==undefined)switchTo(id);});
+$('mapAttack').addEventListener('click',()=>{mapAttack=!mapAttack;$('mapAttack').setAttribute('aria-pressed',String(mapAttack));});
 document.addEventListener('keydown',e=>{
   if(!playing||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
   const code=e.code;
@@ -256,15 +271,17 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(['Tab','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(code))e.preventDefault();
+  if(e.repeat&&!held.has(code))return;
   held.add(code);if(e.repeat)return;
+  if(code==='Space')pendingFire=true;if(code==='KeyJ')pendingJump=true;
   if(/^Digit[1-4]$/.test(code)){switchTo(Number(code.slice(-1))-1);return;}
   if(code==='KeyQ'){nextAgent(g);clearInput();lastHp=activeAgent(g).hp;renderHUD();return;}
   if(code==='Tab'||code==='KeyM'){tactical();return;}
   if(commands[code])execute(commands[code]);if(code==='KeyR'&&reload(g))sound.play('reload');
 });
 document.addEventListener('keyup',e=>held.delete(e.code));
-function buttons(e){if(playing&&!g.paused&&!g.tactical){fire=Boolean(e.buttons&1);ads=Boolean(e.buttons&2);}}
-canvas.addEventListener('mousedown',e=>{if(!playing||g.paused||g.tactical)return;e.preventDefault();buttons(e);requestControl();});
+function buttons(e){if(playing&&!g.paused&&!g.tactical){if(!(e.buttons&1))captureClick=false;const down=Boolean(e.buttons&1)&&!captureClick;if(down&&!fire)pendingFire=true;fire=down;ads=Boolean(e.buttons&2);}}
+canvas.addEventListener('mousedown',e=>{if(!playing||g.paused||g.tactical)return;e.preventDefault();if(devices.pointer&&!settings.keyboard&&!keyboardFallback&&document.pointerLockElement!==canvas){requestControl();return;}buttons(e);});
 document.addEventListener('mouseup',buttons);canvas.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('mousemove',e=>{
   if(document.pointerLockElement===canvas&&playing&&!g.paused&&!g.tactical){buttons(e);look(g,e.movementX,e.movementY,.0022*settings.sensitivity,settings.invert);}
@@ -278,17 +295,22 @@ window.addEventListener('blur',()=>{if(playing)setPaused(true);clearInput();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(playing)setPaused(true);clearInput();}});
 canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();if(playing)setPaused(true);$('fatalText').textContent='The graphics context was lost. Reload to restore the renderer. Campaign progress is saved between contracts.';$('fatal').hidden=false;});
 function simulation(dt){
+  const device=devices.tick(dt);
   if(!g.tactical){
     const ax=Number(held.has('ArrowRight'))-Number(held.has('ArrowLeft')),ay=Number(held.has('ArrowDown'))-Number(held.has('ArrowUp'));
     if(ax||ay)look(g,ax*700*dt,ay*600*dt,.0022*settings.sensitivity,settings.invert);
   }
-  update(g,{forward:Number(held.has('KeyW'))-Number(held.has('KeyS')),strafe:Number(held.has('KeyD'))-Number(held.has('KeyA')),
-    sprint:held.has('ShiftLeft')||held.has('ShiftRight'),crouch:held.has('ControlLeft')||held.has('ControlRight'),
-    jump:held.has('KeyJ'),ads,fire:fire||held.has('Space')},dt);
+  const viewed=g.viewId;
+  update(g,{forward:Number(held.has('KeyW'))-Number(held.has('KeyS'))+device.forward,strafe:Number(held.has('KeyD'))-Number(held.has('KeyA'))+device.strafe,
+    sprint:held.has('ShiftLeft')||held.has('ShiftRight')||device.sprint,crouch:held.has('ControlLeft')||held.has('ControlRight')||device.crouch,
+    jump:pendingJump||device.jump,ads:ads||device.ads,fire:fire||held.has('Space')||pendingFire||device.fire},dt);
+  pendingJump=false;pendingFire=false;
+  if(g.viewId!==viewed){clearInput();lastHp=activeAgent(g).hp;}
   if(g.phase!=='active')complete();
 }
 function frame(now){
   const delta=lastTime===null?0:Math.max(0,(now-lastTime)/1000);lastTime=now;
+  devices.poll(Math.min(delta,.1));
   let alpha=1;
   if(playing&&!g.paused){alpha=clock.advance(delta,simulation).alpha;}
   // Tactical mode displays the same city beneath its command interface.
@@ -300,14 +322,28 @@ function frame(now){
     sound.music(!g.paused&&g.phase==='active',g.alert>0?1:0);labels();
     uiTime+=delta;fpsTime+=delta;frames++;
     if(fpsTime>=1){fps=Math.round(frames/fpsTime);frames=0;fpsTime=0;}
-    if(uiTime>=.1){uiTime=0;renderHUD();drawMap($('miniMap'));if(g.tactical)drawMap($('tacticalMap'),true);}
+    if(uiTime>=.1){uiTime=0;renderHUD();if(!devices.touchEnabled&&!g.tactical)drawMap($('miniMap'));if(g.tactical)drawMap($('tacticalMap'),true);}
   }
   requestAnimationFrame(frame);
 }
 try{
   renderer=new Renderer(canvas,g.world);makeSquad();renderHQ();
+  const area=$('tacticalMap').parentElement,legend=area.querySelector('.map-legend');
+  new ResizeObserver(()=>{
+    const reserved=legend.getClientRects().length?legend.offsetWidth+(parseFloat(getComputedStyle(area).columnGap)||0):0;
+    const size=Math.max(1,Math.min(area.clientWidth-reserved,area.clientHeight));
+    $('tacticalMap').style.width=size+'px';$('tacticalMap').style.height=size+'px';
+  }).observe(area);
+  devices=new Devices({settings,state:()=>({playing,game:g}),actions:{
+    source:()=>{held.clear();fire=false;ads=false;pendingFire=false;pendingJump=false;if(document.pointerLockElement===canvas){hadLock=false;document.exitPointerLock?.();}},
+    pause:setPaused,map:tactical,cycle:()=>{nextAgent(g);clearInput();renderHUD();},reload:()=>{if(reload(g))sound.play('reload');},
+    command:execute,look:(dx,dy,sensitivity)=>look(g,dx,dy,sensitivity,settings.invert),
+    cursor:p=>{lastMapPoint={...p};},move:p=>{lastMapPoint={...p};execute('move');},attack:attackAt,
+    recipient:()=>{const living=g.agents.filter(a=>a.hp>0).map(a=>a.id),current=[...g.selected][0],id=living[(living.indexOf(current)+1)%living.length];selectSquad(g,[id]);renderHUD();},
+    selectAll:()=>{selectSquad(g,g.agents.map(a=>a.id));renderHUD();}
+  }});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
   // QA access is opt-in and absent in ordinary play. It never modifies mechanics.
-  if(new URLSearchParams(location.search).has('qa'))Object.defineProperty(window,'corpowarsQA',{value:{get game(){return g;},get renderer(){return renderer;},get clock(){return clock;},start:startMission,tactical,command:(kind,p)=>command(g,kind,p),switchTo,pause:setPaused}});
+  if(new URLSearchParams(location.search).has('qa'))Object.defineProperty(window,'corpowarsQA',{value:{get game(){return g;},get renderer(){return renderer;},get clock(){return clock;},get devices(){return devices;},start:startMission,tactical,command:(kind,p)=>command(g,kind,p),switchTo,pause:setPaused}});
   requestAnimationFrame(frame);
 }catch(error){$('fatalText').textContent=error.message;$('fatal').hidden=false;console.error(error);}

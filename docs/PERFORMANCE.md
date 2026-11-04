@@ -66,7 +66,9 @@ reload. Its screenshots and JSON are separate run evidence, not claimed until
 that exact CI run passes.
 
 Unverified device coverage: Trent's RTX 5060 Ti, other physical GPUs, Safari,
-Firefox, gamepads, touch/mobile play and screen-reader usability during FPS.
+Firefox, physical Xbox controllers, iOS/Android touch feel and screen-reader usability during FPS.
+CI adds emulated standard gamepads and Chromium multi-touch, which do not establish
+physical device compatibility or subjective aiming feel.
 No GPU speedup against an earlier 3D release is claimed: this is the first 3D
 implementation. Screenshots from software mode must be labelled accordingly.
 
@@ -83,5 +85,24 @@ including simultaneous mouse buttons and offline reload.
 ZIP SHA-256, browser telemetry and screenshot SHA-256 values. The images in
 `images/` are copied directly from that artifact. Chromium used ANGLE SwiftShader
 (a software GPU), so this validates the native WebGL API/shader path and behavior,
-not physical GPU frame rate. Subsequent documentation-only commits leave that
-runtime unchanged.
+not physical GPU frame rate. That artifact is historical initial-build evidence; the controller/mobile
+revision requires its own passing run and is not covered by those screenshots.
+
+## Controller/mobile revision contract
+
+For the cover hot loop, X = fresh per-building boxes versus one retained private
+scratch box; F = bounded synchronous scalar implementations; f = median time for
+10,000 identical ordered rays; d = minimize; C = exact distances/cover ties and
+live geometry edits; B = five warmups plus nine alternating paired trials;
+S = stop at that budget. Variables are categorical, local scope, noisy timing,
+derivative-free information, cheap sequential evaluations, semantic/resource
+constraints, exact arithmetic. Reuse follows OPT-INV-001 and VANILLAJS retained
+workspaces. A WeakMap geometry-cache experiment was rejected after its warmed
+lookup/validation overhead exceeded fresh boxes in an exploratory probe.
+
+`PERFORMANCE_LOCAL.json` records the final fresh/retained samples and exact parity.
+No global GPU/FPS improvement is inferred. Extra patrols intentionally increase
+actor work; fixed-step, upload and draw-count checks remain. DOM nodes are retained,
+unchanged world-label text is not recreated, and the hidden minimap is skipped in
+touch and tactical modes. Main-loop and device changes require packaged browser
+checks in addition to pure input/gameplay tests.

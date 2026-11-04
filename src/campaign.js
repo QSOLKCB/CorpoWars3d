@@ -32,8 +32,8 @@ export const RESEARCH = [
   { id: 'arms', branch: 'AUGMENTATIONS', name: 'Arms · recoil servos', cost: 900, requires: ['head'], description: '18% shorter firing interval; 15% faster reloads.' },
   { id: 'torso', branch: 'AUGMENTATIONS', name: 'Torso · subdermal mesh', cost: 1200, requires: [], description: '+30 maximum HP and 20% incoming damage reduction.' },
   { id: 'legs', branch: 'AUGMENTATIONS', name: 'Legs · kinetic tendons', cost: 900, requires: ['torso'], description: '+18% movement speed for the whole squad.' },
-  { id: 'panic1', branch: 'PANIC', name: 'Dread amplifier', cost: 800, requires: [], description: 'Panic reaches 9 tiles, lasts 8 seconds; recharges in 18 seconds.' },
-  { id: 'panic2', branch: 'PANIC', name: 'Neural aftershock', cost: 1300, requires: ['panic1', 'head'], description: 'Panic lasts 11 seconds and recharges in 14 seconds.' },
+  { id: 'panic1', branch: 'PANIC', name: 'Dread amplifier', cost: 800, requires: [], description: 'Panic reaches 9 tiles, lasts 8 seconds, then has an 18-second cooldown.' },
+  { id: 'panic2', branch: 'PANIC', name: 'Neural aftershock', cost: 1300, requires: ['panic1', 'head'], description: 'Panic lasts 11 seconds, then has a 14-second cooldown.' },
 ];
 export const MISSIONS = [
   { id: 'breakwater', name: 'Hostile Takeover', district: 'Breakwater', seed: 2091, layout: 0, reward: 2400, parTime: 100,
