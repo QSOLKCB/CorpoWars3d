@@ -1,0 +1,40 @@
+name: Check DOS demake
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dos:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install development and emulator tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc binutils dosbox
+          python -m pip install uv==0.13.5
+          gcc --version
+          ld --version | head -1
+      - name: Verify deterministic assets and sanitized simulation/player
+        run: uv run --no-project python games/dos/tools/check.py
+      - name: Build real-mode COM and compare ready-to-play package
+        run: |
+          uv run --no-project python games/dos/tools/build.py
+          cmp games/dos/dist/CORPO-DOS.zip games/dos/download/CORPO-DOS.zip
+      - name: Execute VGA and Sound Blaster 16 checks in DOSBox
+        run: uv run --no-project python games/dos/tools/smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpo-dos-and-evidence
+          path: |
+            games/dos/dist/CORPO-DOS.zip
+            games/dos/dist/evidence/
+          if-no-files-found: error
