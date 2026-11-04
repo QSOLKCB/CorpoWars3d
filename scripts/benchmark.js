@@ -5,7 +5,8 @@ import {createHash} from 'node:crypto';
 import {readFile,writeFile,readdir} from 'node:fs/promises';
 import {cpus,platform,arch} from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {createOperation,update,command,setTactical,STEP} from '../src/fps.js';
+import {createOperation,update,command,setTactical,STEP,traceCover,SCALE} from '../src/fps.js';
+import {rayBox,forward} from '../src/math.js';
 const root=fileURLToPath(new URL('../',import.meta.url)),buffer=new ArrayBuffer(4),floats=new Float32Array(buffer),ints=new Uint32Array(buffer);
 const native=x=>1/Math.sqrt(x);
 function quake(x){floats[0]=x;ints[0]=0x5f3759df-(ints[0]>>>1);const y=floats[0];return y*(1.5-.5*x*y*y);}
@@ -17,6 +18,20 @@ const n=[],q=[];
 for(let i=0;i<9;i++){if(i%2){q.push(sample(quake));n.push(sample(native));}else{n.push(sample(native));q.push(sample(quake));}}
 let error=0;for(const x of values)error=Math.max(error,Math.abs(quake(x)/native(x)-1));
 const median=a=>[...a].sort((a,b)=>a-b)[Math.floor(a.length/2)];
+const coverGame=createOperation(),rays=Array.from({length:10000},(_,i)=>({origin:[i*17%90,1+i%18,i*29%90],direction:forward(i*.121,(i%21-10)*.09)}));
+function freshCover(g,origin,direction,max){
+  let t=max;for(const b of g.world.buildings){
+    const box={min:[b.x*SCALE,0,b.y*SCALE],max:[(b.x+b.w)*SCALE,4+b.height*3.8,(b.y+b.d)*SCALE]};
+    const hit=rayBox(origin,direction,box,t);if(hit!==null)t=Math.min(t,hit);
+  }return t;
+}
+for(const r of rays)if(freshCover(coverGame,r.origin,r.direction,90)!==traceCover(coverGame,r.origin,r.direction,90))throw new Error('Cover parity failed');
+function coverSample(fn){let sum=0;const start=performance.now();for(const r of rays)sum+=fn(coverGame,r.origin,r.direction,90);sink+=sum;return performance.now()-start;}
+for(let i=0;i<5;i++){coverSample(freshCover);coverSample(traceCover);}
+const fresh=[],retained=[];
+for(let i=0;i<9;i++){if(i%2){retained.push(coverSample(traceCover));fresh.push(coverSample(freshCover));}else{fresh.push(coverSample(freshCover));retained.push(coverSample(traceCover));}}
+const cover={rays:rays.length,parity:'exact',fresh_ms:fresh,retained_ms:retained,fresh_median_ms:median(fresh),retained_median_ms:median(retained),
+  scope:'Same ordered slab intersections. Reuses one private scratch box; all building fields read fresh. Warm CPU microbenchmark, not FPS or GPU throughput.'};
 const simulation=[];
 for(let index=0;index<6;index++){
   const samples=[];
@@ -31,7 +46,7 @@ async function hashFiles(path){for(const entry of await readdir(root+path,{withF
 await hashFiles('src');hashes['scripts/benchmark.js']=createHash('sha256').update(await readFile(root+'scripts/benchmark.js')).digest('hex');
 const report={schema:1,environment:{node:process.version,platform:platform(),arch:arch(),cpu:cpus()[0]?.model},
   math:{samples:count,repeats:9,native_ms:n,quake_one_newton_ms:q,native_median_ms:median(n),quake_median_ms:median(q),quake_max_relative_error:error,
-    selected:'native Math.sqrt',reason:'Exact native arithmetic remains authoritative. One Newton iteration introduces approximation; no game-specific accuracy budget justifies replacing hit, collision or normalization math.'},simulation,source_sha256:hashes,sink,
+    selected:'native Math.sqrt',reason:'Exact native arithmetic remains authoritative. One Newton iteration introduces approximation; no game-specific accuracy budget justifies replacing hit, collision or normalization math.'},cover,simulation,source_sha256:hashes,sink,
   limits:'CPU simulation and arithmetic microbenchmarks only. These do not measure native GPU rendering, frame latency, browser input, or performance on the owner desktop.'};
 if(process.argv.includes('--write'))await writeFile(root+'docs/PERFORMANCE_LOCAL.json',JSON.stringify(report,null,2)+'\n');
-console.log(JSON.stringify({native_ms:median(n),quake_ms:median(q),max_relative_error:error,simulation_600_ticks_median_ms:simulation.map(s=>s.median_ms)},null,2));
+console.log(JSON.stringify({native_ms:median(n),quake_ms:median(q),max_relative_error:error,cover,simulation_600_ticks_median_ms:simulation.map(s=>s.median_ms)},null,2));

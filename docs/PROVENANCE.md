@@ -3,8 +3,8 @@
 | Source | Exact source commit | Reuse |
 | --- | --- | --- |
 | QSOLKCB/CorpoWars | `815b609cd6c2eb5c789a78ebe3e91d0438807b79` | Simulation, campaign/economy, challenges, agent profiles and fiction; adapted controlled-agent hook |
-| QSOLKCB/VANILLAJS | `1f965f4e5b6669de0f954e3a39b11aa679e56720` | FixedClock copied to `src/vendor/time.js`; retained GPU buffer pattern consulted |
-| QSOLKCB/QUICKSCOPER | `7c406e2545d82ee6bdc5fda5f198eb22fa183a84` | `math.js`, `audio.js`, `music.js`; raw WebGL/camera/input architecture consulted |
+| QSOLKCB/VANILLAJS | `1f965f4e5b6669de0f954e3a39b11aa679e56720` | FixedClock copied to `src/vendor/time.js`; retained GPU buffer/input reset/pointer-ownership patterns adapted |
+| QSOLKCB/QUICKSCOPER | `7c406e2545d82ee6bdc5fda5f198eb22fa183a84` | `math.js`, `audio.js`, `music.js`, `controller.js`; raw WebGL/camera/input architecture consulted |
 | QSOLKCB/OPT | `7556dd36acd53ed3ed538fd03b1db44e5c1ec869` | Conceptual invariant-driven reuse, bounded working set and cache invalidation; no source copied |
 
 All copied QSOL source is Apache-2.0. Existing attribution is retained in NOTICE.

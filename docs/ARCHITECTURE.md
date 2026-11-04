@@ -1,6 +1,6 @@
 # Architecture
 
-`src/simulation.js`, `campaign.js` and `challenges.js` preserve the original
+`src/simulation.js`, `campaign.js` and `challenges.js` adapt the original
 CorpoWars simulation and data. The donor core skips automatic movement/triggers
 for `game.controlled`, while retaining that agent's cooldown and reload. An
 optional pure control stage runs after previous-pose capture and before combat
@@ -69,3 +69,34 @@ progress is saved between operations; mid-mission saves are not implemented.
 cache prefix. It never deletes another game's caches or intercepts unrelated
 paths. Runtime changes require a cache version bump. All runtime URLs are
 relative and work under a repository subpath.
+
+## Device boundary
+
+`controller.js` samples standard Gamepad state once per rendered frame; curved
+radial sticks preserve analog magnitudes. Buttons provide edges for actions and
+held state for triggers. Identity changes and lifecycle resets require neutral
+input, including partial trigger pulls. `touch.js` owns pointers independently;
+look deltas and brief fire/jump presses survive render frames without a simulation
+tick, then are consumed once. `devices.js` routes menus, tactical cursor and
+browser pointer capture. Neither pure input module reads browser state.
+
+All devices feed the same 60 Hz movement/aim/shot rules. Blur, pause, handoff,
+rotation and cancellation clear transient input. A disconnected active controller
+pauses. Keyboard auto-repeat cannot re-arm a cleared key. Acquiring mouse capture
+is not a shot. Automatic death switches also clear device input. The tactical
+canvas is sized as a square with ResizeObserver so pointer-to-world coordinates
+match the drawn map in both phone orientations.
+
+## Encounter and Panic adaptations
+
+City patrols use seeded ordering, unique IDs, existing pathfinding and unchanged
+combat/Follow AI. Extra patrols have two street waypoints; initial homes/routes
+exclude insertion. Relay response is a finite once-only event with distance and
+line-of-sight spawn exclusions. Original hold and extraction waves remain.
+
+Panic snapshots selected living sources and visible hostile targets once at
+activation. `panicActive` counts down the effect; `panicCooldown` counts down
+effect plus recharge, guaranteeing full downtime after effect expiration. Both
+advance only in simulation time. No toggle/armed/automatic-recast state remains.
+Empty-target activation still spends the cooldown; changing selection cannot
+refresh it. Original research range/duration/recharge benefits are preserved.

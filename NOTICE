@@ -8,13 +8,18 @@ from CorpoWars at 815b609cd6c2eb5c789a78ebe3e91d0438807b79, Apache-2.0.
 src/simulation.js is modified to hand a piloted agent's movement and trigger to
 the FPS adapter, apply control before objective evaluation and reject direct
 motion for stationary interactions. Campaign and challenge data retain the
-original rules.
+original economy/save rules. CorpoWars3d adds finite city patrols, a relay
+response and a manual Panic burst with a cooldown after the effect.
 
 src/vendor/time.js is QSOLKCB/VANILLAJS's FixedClock, Apache-2.0, at
 1f965f4e5b6669de0f954e3a39b11aa679e56720.
 The new renderer adapts its retained-buffer capacity pattern and credits the
 invariant-driven reuse concepts in QSOLKCB/OPT at
 7556dd36acd53ed3ed538fd03b1db44e5c1ec869. No OPT donor source is copied.
+
+src/controller.js adapts QUICKSCOPER standard gamepad sampling and radial sticks.
+src/touch.js and src/devices.js adapt VANILLAJS neutral-input and pointer-ownership
+patterns; no browser packages are introduced.
 
 src/math.js, src/audio.js and src/music.js derive from QSOLKCB/QUICKSCOPER,
 Apache-2.0, at 7c406e2545d82ee6bdc5fda5f198eb22fa183a84.

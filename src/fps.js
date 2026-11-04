@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // FPS adapter over CorpoWars' original autonomous simulation. No browser globals.
 import {createGame, tick, startGame, walkable, nearestWalkable, findPath,
-  selectAgents, orderMove, orderAttack, stopAgents, medkit, pulse, togglePanic,
+  selectAgents, orderMove, orderAttack, stopAgents, medkit, pulse, activatePanic,
   message, objectiveDuration, orderEscort, cycleMode} from './simulation.js';
 import {createCampaign} from './campaign.js';
 import {clamp, forward, rayBox, boxAt} from './math.js';
@@ -38,9 +38,17 @@ export function look(g,dx,dy,sensitivity=.0022,invert=false) {
 }
 export function eyeOf(a){return [a.x*SCALE,(a.stance==='crouch'?1.05:1.65)+(a.elevation||0),a.y*SCALE];}
 export function buildingBox(b){return {min:[b.x*SCALE,0,b.y*SCALE],max:[(b.x+b.w)*SCALE,4+b.height*3.8,(b.y+b.d)*SCALE]};}
+// Retain one scratch box, as VANILLAJS retains typed upload capacity. This pure,
+// synchronous trace never exposes the workspace; every geometry field is read
+// fresh, so terrain edits and replacement worlds cannot use stale cover.
+const coverScratch={min:[0,0,0],max:[0,0,0]};
 export function traceCover(g,origin,direction,max=100) {
-  let t=max;
-  for(const b of g.world.buildings){const hit=rayBox(origin,direction,buildingBox(b),t);if(hit!==null)t=Math.min(t,hit);}
+  let t=max;const box=coverScratch;
+  for(const b of g.world.buildings){
+    box.min[0]=b.x*SCALE;box.min[2]=b.y*SCALE;
+    box.max[0]=(b.x+b.w)*SCALE;box.max[1]=4+b.height*3.8;box.max[2]=(b.y+b.d)*SCALE;
+    const hit=rayBox(origin,direction,box,t);if(hit!==null)t=Math.min(t,hit);
+  }
   return t;
 }
 export function aimPoint(g) {
@@ -62,9 +70,9 @@ export function shoot(g) {
   const origin=eyeOf(a),dir=forward(a.yaw,a.pitch),max=Math.max(a.range,16)*SCALE;
   let nearest=traceCover(g,origin,dir,max),target=null,headshot=false;
   // Friends absorb the trace without taking damage; cover always wins equal ties.
-  const actors=[...g.agents,...g.guards];
-  if(g.courier?.active&&g.courier.hp>0)actors.push(g.courier);
-  for(const unit of actors) {
+  const agentCount=g.agents.length,guardCount=g.guards.length,total=agentCount+guardCount+(g.courier?.active&&g.courier.hp>0?1:0);
+  for(let i=0;i<total;i++) {
+    const unit=i<agentCount?g.agents[i]:i<agentCount+guardCount?g.guards[i-agentCount]:g.courier;
     if(unit===a||unit.hp<=0)continue;
     const h=unit.stance==='crouch'?1.3:1.9,base=unit.elevation||0;
     const hit=rayBox(origin,dir,boxAt(unit.x*SCALE,base+h/2,unit.y*SCALE,.6,h,.6),nearest);
@@ -117,7 +125,7 @@ export function command(g,kind,point=aimPoint(g)) {
   if(!ids.length)return false;
   if(kind==='heal')return medkit(g);
   if(kind==='emp')return pulse(g);
-  if(kind==='panic')return togglePanic(g);
+  if(kind==='panic')return activatePanic(g);
   if(kind==='escort'){
     const ok=orderEscort(g);
     if(ok)for(const id of ids){g.follow.delete(id);g.agents[id].command='ESCORT';}

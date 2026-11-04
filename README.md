@@ -20,7 +20,7 @@ audio and local saves. No engine, CDN, remote font, runtime packages or accounts
 uv run --no-project python -m http.server 8000
 ```
 
-Open `http://localhost:8000/` in a desktop browser. Modules need HTTP rather
+Open `http://localhost:8000/` in a current desktop or mobile browser. Modules need HTTP rather
 than a `file:` URL. WebGL 2 is preferred; WebGL 1 instancing and expanded-buffer
 paths are included. Devices without WebGL automatically use a lower-detail
 software 3D renderer. An optional service worker supports offline reload after
@@ -53,18 +53,56 @@ piloted. If the active agent falls, control transfers to the next survivor.
 | Tactical agent card / Shift-click | Select one recipient / adjust selection |
 | F / G / H | Follow active agent / move at aim / hold position |
 | V | Toggle autonomous squad fire discipline |
-| X / C / Z | EMP / selected squad medical patch / panic system |
+| X / C / Z | EMP / selected squad medical patch / manual Panic burst |
 | E / B | Escort released witness / cycle selected AUG conversions |
 | R / Shift / Ctrl / J | Reload / sprint / crouch / jump |
 | P / Esc | Pause; orders can be planned on the paused tactical map |
 | Arrows / Space | Keyboard aim / fire; keyboard mode disables pointer lock |
+
+### Xbox / standard gamepad
+
+Connect a controller and press a button, then release the controls to arm it.
+The browser must expose the standard Gamepad mapping; no vendor ID guessing.
+
+| Control | FPS | Tactical map |
+| --- | --- | --- |
+| Left / right stick | Move / aim | Move map cursor / unused |
+| RT / LT | Fire / aim down sights | Activate focused control / unused |
+| A / X | Jump / reload | Move at cursor / attack visible enemy at cursor |
+| B / Y | Hold crouch / cycle living agents | Return to agent / cycle selected recipient |
+| LB or View / RB | Map / Follow | Return / select all agents |
+| L3 / R3 | Hold sprint / hold crouch | — |
+| D-pad ↑ / ↓ | Move at aim / Hold | Focus previous / next control |
+| D-pad ← / → | Patch / EMP | Adjust focused setting |
+| Menu | Pause / resume | Pause / resume planning |
+
+Menus use D-pad ↑/↓ to focus, ←/→ to adjust settings, and A to activate.
+All tactical commands, including Panic, are reachable with D-pad focus + RT.
+Disconnecting the active controller pauses. Reconnect, resume and perspective
+changes require neutral sticks/buttons before gameplay resumes. Separate
+controller sensitivity and deadzone settings are in **System**.
+
+### Mobile / touch
+
+Touch controls appear automatically on coarse-pointer devices; **System → Touch
+controls** can force them on or off. Left pad moves, right pad drags to aim.
+Holding **FIRE** also accepts drag-to-aim, so moving, aiming and firing work with
+two thumbs. ADS, sprint and crouch are held buttons; jump, reload, next agent and
+Squad Map are taps. Independent pointers support simultaneous actions.
+
+The map includes visible All / Viewed / Add Select / Pilot Selected / Focus Fire
+controls on phones. Tap to move; enable Focus Fire and tap visible security to
+attack. Pause remains accessible while planning. Portrait and landscape layouts
+are included; landscape offers more view space. Mobile defaults to Balanced
+resolution; saved quality preferences take precedence. Rotation and lost touch
+capture cancel held controls. Browser zoom is not disabled.
 
 The map is **live**. Press P to pause for planning: selection, map orders and
 command shortcuts remain available while movement, combat and timers stop.
 Press P or the resume button to apply the queued orders. While planning, Tab
 navigates the controls and M returns to the paused first-person view.
 To pilot a selected agent
-from the map, press 1–4 or double-click their card. Move orders include the
+from the map, use Pilot Selected, press 1–4 or double-click their card. Move orders include the
 piloted agent's saved route, but direct input remains in charge until you leave
 their view. Follow applies to selected teammates. Hold-fire governs AI triggers;
 the operator can still fire manually.
@@ -86,6 +124,29 @@ Rewards are paid once per contract. Campaign saves use a separate, validated
 CorpoWars3d storage key. Returning to headquarters abandons an unfinished run;
 only between-contract campaign progress is saved.
 
+### Busier districts and Panic balance
+
+Every district adds **8 street patrols on Relaxed / 12 on Hostile**, with longer
+street routes and marksmen in later contracts. They begin at least 13 tiles
+from the insertion squad. Completing the relay dispatches up to 4 / 6 response
+units, once only, outside squad sight and at least 10 tiles away. Existing hold
+waves and extraction reinforcements remain. There is no endless spawn timer.
+
+**Panic is a manual, one-shot burst**, affecting only living hostiles in range
+and line of sight of selected living agents at the instant of activation. It
+never auto-fires when the cooldown ends, nor when a hostile later enters range.
+Using it with no targets still consumes the burst. It cannot be used paused.
+
+| Research | Effect (Relaxed) | Cooldown after the effect ends |
+| --- | ---: | ---: |
+| Base | 5 seconds | 24 seconds |
+| Dread amplifier | 8 seconds | 18 seconds |
+| Neural aftershock | 11 seconds | 14 seconds |
+
+Hostile retains its 0.65× fear-duration modifier. The button shows ACTIVE,
+remaining cooldown seconds, then READY. Switching agents/selection does not
+reset cooldown. Campaign saves and purchased upgrades remain compatible.
+
 ## Rendering and optimization
 
 - Static city geometry uploads once per operation. Buildings, windows, kerbs,
@@ -96,6 +157,10 @@ only between-contract campaign progress is saved.
   WebGL 1 without instancing expands geometry into retained vertex buffers.
 - VANILLAJS' fixed clock runs gameplay at 60 Hz with bounded catch-up and
   interpolated presentation. The original binary-heap routing workspace is kept.
+- Cover rays reuse one private scratch box, reading every building field fresh;
+  no per-building box/array allocation or approximate arithmetic is required.
+- DOM references are retained, unchanged world-label text is reused and hidden
+  touch minimaps are not redrawn.
 - HUD/map updates are capped at 10 Hz. The map terrain and software renderer's
   static camera view use bounded caches with explicit invalidation.
 - High, Balanced and Low resolution controls, reduced motion, keyboard aim,
@@ -104,8 +169,8 @@ only between-contract campaign progress is saved.
   it introduces approximation without a demonstrated gameplay benefit.
 
 See [architecture](docs/ARCHITECTURE.md), [performance and limitations](docs/PERFORMANCE.md)
-and [donor provenance](docs/PROVENANCE.md). This is an initial playable browser
-release, not a claim of hardware certification or cross-browser bit exactness.
+and [donor provenance](docs/PROVENANCE.md). Controller/touch automation uses emulated devices; physical Xbox hardware, iOS
+and Android touch feel are not certified by these tests.
 
 ## Verify and package
 
@@ -121,7 +186,8 @@ node scripts/benchmark.js
 `dist/` is an allowlisted standalone static artifact. CI additionally uses
 `uv` with pinned, CI-only Playwright to compile the real WebGL shaders and test
 the packaged game under `/CorpoWars3d/`, including offline reload and simultaneous
-mouse buttons. CI browser screenshots and telemetry are retained as artifacts.
+mouse buttons, emulated Xbox input, multi-touch cancellation and both mobile
+orientations. CI browser screenshots and telemetry are retained as artifacts.
 
 The Pages workflow validates before deployment. For first publication, set
 repository **Settings → Pages → Source → GitHub Actions**, then merge to main or
