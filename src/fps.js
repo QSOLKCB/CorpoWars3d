@@ -168,7 +168,7 @@ export function update(g,input={},dt=STEP) {
   // combat and objectives against the resulting current-tick movement.
   tick(g,dt,()=>{if(!g.tactical)moveDirect(g,input,dt);});
   if(g.phase!=='active')return;
-  if(activeAgent(g).hp<=0)nextAgent(g);
+  if(activeAgent(g).hp<=0){nextAgent(g);input={};}
   if(!g.tactical){
     g.ads=clamp(g.ads+((input.ads?1:0)-g.ads)*Math.min(1,dt*16),0,1);
     if(input.fire)shoot(g);

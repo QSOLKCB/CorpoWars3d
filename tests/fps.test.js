@@ -73,6 +73,10 @@ test('automatic death switch and total squad loss have bounded outcomes',()=>{
 test('fire discipline stops autonomous triggers but permits the piloted trigger',()=>{
   const g=fixture();command(g,'fire');const before=g.agents.map(a=>a.ammo);update(g);assert.deepEqual(g.agents.map(a=>a.ammo),before);assert.equal(shoot(g),true);
 });
+test('automatic death handoff cannot apply the former operator trigger to the next agent',()=>{
+  const g=fixture();g.guards=[];g.agents[0].hp=0;const ammo=g.agents[1].ammo;
+  update(g,{fire:true,ads:true});assert.equal(g.viewId,1);assert.equal(g.shots,0);assert.equal(g.agents[1].ammo,ammo);
+});
 test('ray-box slabs handle parallel axes, internal origins and maximum distance',()=>{
   const box=boxAt(0,0,0,2,2,2);assert.equal(rayBox([0,0,3],[0,0,-1],box),2);assert.equal(rayBox([0,0,0],[1,0,0],box),0);
   assert.equal(rayBox([2,0,3],[0,0,-1],box),null);assert.equal(rayBox([0,0,3],[0,0,-1],box,1),null);
