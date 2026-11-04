@@ -17,6 +17,13 @@ int main(void){
     }
     start();for(int i=0;i<ENEMIES;i++)g.e[i].hp=0;memset(g.shots,0,sizeof(g.shots));int hp=g.a[0].hp;step(20,RIGHT);int x=g.a[0].x;game_step(&g,SELECT1<<1);assert(g.active==1&&g.a[0].hp==hp&&abs(g.a[0].x-x)<=3*Q);
     game_step(&g,0);game_step(&g,ORDER_H);assert(g.a[0].order==HOLD);game_step(&g,0);game_step(&g,ORDER_F);assert(g.a[0].order==FOLLOW);
+    /* Selecting a held agent and handing it back to AI must keep its order. */
+    game_step(&g,0);game_step(&g,ORDER_H);assert(g.a[0].order==HOLD);
+    game_step(&g,0);game_step(&g,SELECT1);assert(g.active==0&&g.a[0].order==HOLD);
+    game_step(&g,0);game_step(&g,SELECT1<<1);x=g.a[0].x;
+    step(20,RIGHT);assert(g.a[0].order==HOLD&&g.a[0].x==x);
+    start();g.a[1].order=HOLD;g.a[0].hp=0;game_step(&g,0);
+    assert(g.active==1&&g.a[1].order==HOLD);
     start();game_step(&g,PANIC);assert(g.panic==525);step(10,0);game_step(&g,PANIC);assert(g.panic==514);game_step(&g,0);game_step(&g,PAUSE);u32 tick=g.tick;u16 cooldown=g.panic;step(100,0);assert(g.tick==tick&&g.panic==cooldown);game_step(&g,PAUSE);game_step(&g,0);step(525,0);game_step(&g,PANIC);assert(g.panic==525);
     start();for(int i=0;i<ENEMIES;i++)g.e[i].hp=0;g.a[0].x=1770*Q;
     step(20,USE|LEFT);assert(!g.terminal);g.a[0].x=1770*Q;step(34,USE);assert(!g.terminal);step(1,USE);assert(g.terminal);

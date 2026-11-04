@@ -67,7 +67,7 @@ void game_level(Game *g,u8 level) {
     }
 }
 void game_init(Game *g) { zero(g,sizeof(*g)); for(int i=0;i<AGENTS;i++)g->a[i].hp=(i==3?140:100);game_level(g,0);g->phase=BRIEF; }
-static void swap(Game *g,int id) { if(g->a[id].hp>0) { g->active=(u8)id;g->a[id].order=FOLLOW; } }
+static void swap(Game *g,int id) { if(g->a[id].hp>0) { g->active=(u8)id; } }
 static void next(Game *g) { for(int n=1;n<=4;n++)if(g->a[(g->active+n)%4].hp>0){swap(g,(g->active+n)%4);return;}g->phase=LOST; }
 void game_step(Game *g,u16 input) {
     u16 edge=input&~g->previous;g->previous=input;g->sfx=0;
