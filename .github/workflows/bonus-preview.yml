@@ -45,10 +45,13 @@ jobs:
           sha256sum out/bonus-a.zip > out/SHA256SUMS.txt
       - name: Install pinned CI-only Chromium
         run: uvx --from playwright==1.56.0 playwright install --with-deps chromium
-      - name: Packaged browser smoke and zero external game requests
+      - name: Extract preview ZIP and smoke-test shipped archive, not source checkout
         env:
           BONUS_SCREENSHOT_DIR: out
-        run: uv run --no-project --with playwright==1.56.0 python games/close-quarters/tests/browser_smoke.py
+          BONUS_ROOT: out/unpacked/CORPOWARS-CLOSE-QUARTERS
+        run: |
+          uv run --no-project python -m zipfile -e out/bonus-a.zip out/unpacked
+          uv run --no-project --with playwright==1.56.0 python games/close-quarters/tests/browser_smoke.py
       - name: Preview artifacts / NOT a release
         uses: actions/upload-artifact@v4
         if: always()

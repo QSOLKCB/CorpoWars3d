@@ -12,7 +12,9 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(os.environ['BONUS_ROOT']).resolve() if os.environ.get('BONUS_ROOT') else Path(__file__).resolve().parents[3]
+if not (ROOT / 'games/close-quarters/index.html').is_file():
+    raise RuntimeError(f'Invalid game root: {ROOT}')
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
