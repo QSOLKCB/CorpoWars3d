@@ -6,6 +6,7 @@ export const PALETTE={road:[.055,.077,.085],kerb:[.14,.18,.19],steel:[.065,.105,
   teal:[.28,.72,.65],gold:[1,.62,.23],red:[.95,.25,.20]};
 export function buildCity(world) {
   const boxes=[],signs=[],rand=seededRandom(world.seed),size=world.size*SCALE;
+  const accent=world.visualTheme==='violet'?[.56,.40,.94]:world.visualTheme==='crimson'?[.93,.29,.38]:null;
   const box=(x,y,z,w,h,d,color,glow=0,angle=0)=>boxes.push([x,y,z,w,h,d,...color,Math.cos(angle),Math.sin(angle),glow]);
   box(size/2,-.15,size/2,size,.3,size,PALETTE.road);
   // Ground markings, grates, puddles and raised service strips.
@@ -29,7 +30,7 @@ export function buildCity(world) {
     box(x,.55,z,w+.05,1.1,d+.05,[.10,.14,.155]);
     box(x,h+.15,z,w+.3,.3,d+.3,[.12,.16,.18]);
     box(x,h+.55,z,w*.5,.8,d*.4,[.09,.13,.15]);
-    const cyan=index%3!==0,lit=cyan?[.3,.65,.62]:[.84,.52,.25];
+    const cyan=index%3!==0,lit=cyan?(accent??[.3,.65,.62]):[.84,.52,.25];
     for(let floor=2.3;floor<h-.7;floor+=1.75){
       for(let a=-w/2+.7;a<w/2-.4;a+=1.2){
         const c=rand()<.27?[.065,.12,.15]:lit,em=c===lit?.65:0;
@@ -43,8 +44,16 @@ export function buildCity(world) {
       }
     }
     // Facade ribs, emissive edge seams and roof antennae.
-    box(x-w/2-.025,h/2,z-d/2-.025,.07,h,.07,cyan?PALETTE.teal:PALETTE.gold,.9);
-    box(x+w/2+.025,h/2,z+d/2+.025,.07,h,.07,cyan?PALETTE.teal:PALETTE.gold,.9);
+    box(x-w/2-.025,h/2,z-d/2-.025,.07,h,.07,cyan?(accent??PALETTE.teal):PALETTE.gold,.9);
+    box(x+w/2+.025,h/2,z+d/2+.025,.07,h,.07,cyan?(accent??PALETTE.teal):PALETTE.gold,.9);
+    // Extra rooftop signal crowns are wholly decorative and above solid cover.
+    if(accent&&index%3===0){
+      box(x,h+.72,z,w*.68,.08,d*.68,accent,.75);
+      for(const dx of [-w*.25,w*.25]){
+        box(x+dx,h+1.38,z,.09,1.2,.09,accent,.8);
+        box(x+dx,h+2.02,z,.34,.12,.34,accent,1);
+      }
+    }
     if(index%3===0){box(x,h+1.8,z,.08,3,.08,[.22,.28,.30]);box(x,h+3.35,z,.14,.16,.14,PALETTE.red,1);}
     // Every sign is a physical, original texture panel; one atlas, one draw.
     if(w>4){

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createCampaign} from '../src/campaign.js';
+import {createCampaign,MISSIONS} from '../src/campaign.js';
 import {createOperation,command,update,STEP,buildingBox,traceCover,SCALE} from '../src/fps.js';
 import {lineOfSight,walkable,objectiveDuration} from '../src/simulation.js';
 import {rayBox,forward} from '../src/math.js';
@@ -37,7 +37,7 @@ test('Panic only affects living hostiles in range and line of sight of selected 
   const empty=panicFixture();empty.selected.clear();assert.equal(command(empty,'panic'),false);assert.equal(empty.panicCooldown,0);
 });
 test('all districts have deterministic street patrols outside insertion area',()=>{
-  for(const difficulty of ['relaxed','hostile'])for(let i=0;i<6;i++){
+  for(const difficulty of ['relaxed','hostile'])for(let i=0;i<MISSIONS.length;i++){
     const c=createCampaign();c.difficulty=difficulty;const g=createOperation(c,i),again=createOperation(c,i),expected=difficulty==='relaxed'?8:12;
     assert.equal(g.cityPatrols,expected);assert.deepEqual(g.guards,again.guards);
     assert.equal(new Set(g.guards.map(e=>e.id)).size,g.guards.length);

@@ -4,6 +4,8 @@ export const CHALLENGES = [
   { id: 'clean', name: 'Clean Extraction', description: 'Extract all four agents alive.' },
   { id: 'restraint', name: 'Economy of Force', description: 'Win without medical patches, EMP or panic bursts.' },
   { id: 'swift', name: 'Against the Clock', description: 'Complete the contract within its displayed par time.' },
+  { id: 'ghost', name: 'Ghost Dividend', description: 'Complete the contract without neutralising security units.' },
+  { id: 'hardline', name: 'Unbroken Signal', description: 'Extract all four agents on Hostile difficulty.' },
 ];
 
 export function challengeResults(game) {
@@ -13,6 +15,8 @@ export function challengeResults(game) {
     clean: won&&game.agents?.length===4&&game.agents.every(a=>Number.isFinite(a.hp)&&a.hp>0),
     restraint: Boolean(won&&unused),
     swift: Boolean(won&&Number.isFinite(game.time)&&game.time>=0&&Number.isFinite(game.mission?.parTime)&&game.mission.parTime>0&&game.time<=game.mission.parTime),
+    ghost: Boolean(won&&Number.isSafeInteger(game.kills)&&game.kills===0),
+    hardline: Boolean(won&&game.difficulty?.name==='Hostile'&&game.agents?.length===4&&game.agents.every(a=>Number.isFinite(a.hp)&&a.hp>0)),
   };
   return CHALLENGES.map(challenge=>({...challenge,earned:Boolean(earned[challenge.id])}));
 }

@@ -79,6 +79,26 @@ export const MISSIONS = [
     objectives: ['Disable the failsafe','Seize the severance fund'], labels: ['FAILSAFE','SEVERANCE FUND'],
     guards: [[8.5,29.5],[11.5,23.5,'bulwark'],[14.5,20.5,'marksman'],[20.5,20.5],[29.5,17.5,'bulwark'],[29.5,11.5],[23.5,11.5,'marksman'],[20.5,2.5],[11.5,2.5,'bulwark'],[2.5,8.5,'marksman']],
     reinforcements: [[29.5,2.5,'marksman'],[20.5,11.5,'bulwark'],[2.5,11.5,'guard']] },
+  // Two expansion operations follow the original six without renumbering them.
+  { id: 'black-dividend', name: 'Black Dividend', district: 'Dividend Grid', seed: 10711, layout: 3,
+    visualTheme: 'violet', reward: 8300, parTime: 125, kind: 'hold', relayDuration: 3, vaultDuration: 10,
+    brief: 'The dividend algorithm has bought the emergency network. Restore the citizens uplink, hold the independent transmitter against two response waves, then extract the squad.',
+    relay: [11.5,29.5], vault: [20.5,20.5], exit: [29.5,2.5], spawn: [2.5,29.5],
+    objectives: ['Restore the citizens uplink','Broadcast the public ledger'], labels: ['UPLINK','PUBLIC LEDGER'],
+    guards: [[11.5,26.5,'bulwark'],[20.5,29.5,'marksman'],[20.5,23.5],[23.5,20.5,'bulwark'],[29.5,11.5,'marksman'],[29.5,5.5],[11.5,11.5,'marksman']],
+    waves: [
+      { at: 0, guards: [[20.5,11.5,'marksman'],[29.5,20.5,'bulwark']] },
+      { at: 5, guards: [[11.5,20.5,'guard'],[29.5,29.5,'marksman']] },
+    ],
+    reinforcements: [[29.5,2.5,'guard'],[20.5,2.5,'bulwark']] },
+  { id: 'proxy-election', name: 'Proxy Election', district: 'Apex Consolidated', seed: 11891, layout: 5,
+    visualTheme: 'crimson', reward: 10500, parTime: 130, kind: 'lockdown',
+    relayDuration: 3, vaultDuration: 6, lockdown: { relaxed: 180, hostile: 130 },
+    brief: 'The board has voted to privatise dissent. Disable the proxy-vote failsafe, recover the original shareholder register and reach the west evacuation gate before the district is sealed.',
+    relay: [11.5,20.5], vault: [29.5,11.5], exit: [2.5,2.5], spawn: [1.5,29.5],
+    objectives: ['Disable proxy-vote failsafe','Liberate the shareholder register'], labels: ['PROXY LOCK','REGISTER'],
+    guards: [[8.5,29.5,'marksman'],[11.5,23.5,'bulwark'],[14.5,20.5],[20.5,20.5,'marksman'],[29.5,17.5,'bulwark'],[29.5,11.5],[23.5,11.5,'marksman'],[20.5,2.5],[11.5,2.5,'bulwark'],[2.5,8.5,'marksman']],
+    reinforcements: [[29.5,2.5,'marksman'],[20.5,11.5,'bulwark'],[2.5,11.5,'guard']] },
 ];
 
 export function createCampaign() {

@@ -85,11 +85,11 @@ function headquarters(){
 }
 function complete(){
   if(settled)return;settled=true;g.paused=true;clock.setPaused(true);clearInput();document.exitPointerLock?.();sound.stopMusic();
-  let reward=0;
-  if(g.phase==='won'){reward=settleMission(campaign,g.missionIndex,'won');recordChallenges(campaign,g);saveCampaign();sound.play('collateral');}
+  let reward=0,medals=[];
+  if(g.phase==='won'){reward=settleMission(campaign,g.missionIndex,'won');medals=recordChallenges(campaign,g);saveCampaign();sound.play('collateral');}
   else sound.play('end');
   $('pauseTitle').textContent=g.phase==='won'?'CONTRACT CLOSED.':'LINK TERMINATED.';
-  $('pauseText').textContent=g.phase==='won'?`${g.agents.filter(a=>a.hp>0).length} agents extracted. ${g.kills} security units neutralised. ${reward?`${reward.toLocaleString()} credits transferred.`:'Contract already paid.'}`:g.log[0]?.text||'All agents have been lost.';
+  $('pauseText').textContent=g.phase==='won'?`${g.agents.filter(a=>a.hp>0).length} agents extracted in ${Math.floor(g.time/60)}:${String(Math.floor(g.time%60)).padStart(2,'0')}. ${g.kills} security units neutralised. ${reward?`${reward.toLocaleString()} credits transferred.`:'Contract already paid.'} ${medals.length?`Medals: ${medals.join(', ')}.`:'No medals this time.'}`:g.log[0]?.text||'All agents have been lost.';
   $('resume').hidden=false;$('resume').firstChild.textContent='RETURN TO HEADQUARTERS ';$('pause').hidden=false;devices?.refresh();
 }
 function renderHQ(){
