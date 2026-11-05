@@ -344,7 +344,9 @@ def verify(archive: Path, root: Path | None = ROOT) -> None:
                     for i in info
                 )):
             raise ValueError("Nonregular, noncanonical or oversized premium ZIP entry")
-        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt", BONUS_MEMBER}.issubset(names):
+        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt",
+                "PRICING_AND_RIGHTS.txt", "Bonus-DOS/CORPO-DOS.zip",
+                POSTSCRIPT_MEMBER, BONUS_MEMBER}.issubset(names):
             raise ValueError("Missing proof metadata or post-soundtrack bonus")
         verify_bonus(z.read(BONUS_MEMBER), root)
         checksum = z.read("SHA256SUMS")
@@ -354,11 +356,13 @@ def verify(archive: Path, root: Path | None = ROOT) -> None:
         manifest = json.loads(z.read("MANIFEST.json"))
         actual = [{"path": n, "bytes": len(z.read(n)), "sha256": sha(z.read(n))}
                   for n in sorted(names) if n not in ("MANIFEST.json", "SHA256SUMS")]
-        if manifest.get("schema") != "corpowars3d-payhip-bundle/1" or manifest.get("contents") != actual:
+        if (not isinstance(manifest, dict)
+                or manifest.get("schema") != "corpowars3d-payhip-bundle/1"
+                or manifest.get("contents") != actual):
             raise ValueError("Manifest does not match payload")
         story_names = [n for n in names if n.startswith("Story/")]
         music_names = [n for n in names if n.startswith("Music/")]
-        if manifest["edition"] == "release":
+        if manifest.get("edition") == "release":
             if (any("PENDING" in n for n in names)
                     or len(story_names) != 1 or len(music_names) != 1
                     or story_names[0].count("/") != 1 or music_names[0].count("/") != 1
@@ -367,7 +371,7 @@ def verify(archive: Path, root: Path | None = ROOT) -> None:
                 raise ValueError("Release requires exactly one supported story and music file")
             validate_story(Path(story_names[0]), z.read(story_names[0]))
             validate_music(Path(music_names[0]), z.read(music_names[0]))
-        elif manifest["edition"] == "preview":
+        elif manifest.get("edition") == "preview":
             if (story_names != ["Story/STORY_PENDING.txt"]
                     or music_names != ["Music/MUSIC_PENDING.txt"]
                     or z.read(story_names[0]) != PREVIEW_STORY
