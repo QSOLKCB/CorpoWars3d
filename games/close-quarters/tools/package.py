@@ -28,6 +28,9 @@ ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 
 def source(path: str, root: Path = ROOT) -> bytes:
+    absolute = root.absolute()
+    if any(part.is_symlink() for part in (absolute, *absolute.parents)):
+        raise ValueError(f"Linked source root or ancestor: {root}")
     key = PurePosixPath(path)
     if key.is_absolute() or ".." in key.parts or not path or "\\" in path:
         raise ValueError(f"Unsafe archive path: {path!r}")
@@ -122,8 +125,11 @@ def verify(dest: Path, root: Path = ROOT) -> None:
             raise ValueError("Archive entry set/order differs from the pinned import closure")
         for member, data in expected.items():
             zi = z.getinfo(PREFIX + member)
-            if zi.date_time != ZIP_EPOCH or zi.file_size != len(data):
-                raise ValueError(f"Noncanonical ZIP metadata for {member}")
+            if (zi.date_time != ZIP_EPOCH or zi.file_size != len(data)
+                    or zi.is_dir() or zi.create_system != 3
+                    or zi.external_attr != (0o100644 << 16)
+                    or zi.compress_type != zipfile.ZIP_DEFLATED):
+                raise ValueError(f"Noncanonical or nonregular ZIP metadata for {member}")
             if z.read(zi) != data:
                 raise ValueError(f"Archive content does not match the source for {member}")
     print(f"Verified {dest} against {len(expected)} allowlisted entries")

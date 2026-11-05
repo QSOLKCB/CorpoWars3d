@@ -30,6 +30,19 @@ BONUS_MEMBER = "ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip"
 BONUS_PREFIX = "CORPOWARS-CLOSE-QUARTERS/"
 BONUS_INDEX = BONUS_PREFIX + "games/close-quarters/index.html"
 BONUS_CHECKSUMS = BONUS_PREFIX + "SHA256SUMS.txt"
+POSTSCRIPT_MEMBER = "ZZ-POST-SOUNDTRACK-BONUS/00-AFTER_THE_MUSIC.txt"
+PREVIEW_STORY = b"NOT FOR SALE: the original story is awaiting author handoff.\n"
+PREVIEW_MUSIC = b"NOT FOR SALE: the original music track is awaiting composition.\n"
+POSTSCRIPT = """AFTER THE SOUNDTRACK — THE FINAL SURPRISE
+You have reached the end of the story and music. One more thing remains.
+
+CLOSE QUARTERS: eight compact AFTER//ZERO sectors brought into the offline
+CorpoWars single-player squad FPS. Extract CORPOWARS-CLOSE-QUARTERS.zip,
+then extract its contained CORPOWARS-CLOSE-QUARTERS directory. Serve the
+extracted directory over local HTTP (python -m http.server 8000), then open
+CORPOWARS-CLOSE-QUARTERS/games/close-quarters/ in your browser.
+No account, multiplayer server, DRM or further payment is needed.
+"""
 GUIDE = """CORPOWARS3D: PREMIUM OPERATIONS
 Four bodies. One conscience. No shareholders were consulted.
 
@@ -50,15 +63,6 @@ DOSBox is required; this is a separate 16-bit DOS game.
 STORY AND MUSIC
 The release bundle includes one original narrative and one music track.
 The preview bundle has explicit placeholders and is NOT FOR SALE.
-
-AFTER THE MUSIC — SECRET CLOSE QUARTERS BONUS
-Only after finishing the story and soundtrack, extract:
-ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip
-It contains eight compact AFTER//ZERO arenas remade as an offline, solo
-CorpoWars squad FPS. Unzip the nested archive, serve its extracted directory
-over local HTTP, then open:
-CORPOWARS-CLOSE-QUARTERS/games/close-quarters/
-No online account, multiplayer service or payment is required to play.
 
 RIGHTS
 Browser game: Apache-2.0, see Browser-Game/LICENSE and NOTICE.
@@ -88,7 +92,15 @@ def valid_name(name: str) -> bool:
                 and name == p.as_posix() and all(x not in ("", ".", "..") for x in p.parts))
 
 
+def ensure_unlinked_path(path: Path) -> None:
+    """Do not resolve away symlinks in a root or any of its ancestors."""
+    absolute = path.absolute()
+    if any(part.is_symlink() for part in (absolute, *absolute.parents)):
+        raise ValueError(f"Linked path is not an allowed source: {path}")
+
+
 def file_bytes(path: Path) -> bytes:
+    ensure_unlinked_path(path)
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"Not a regular, unlinked file: {path}")
     if path.stat().st_size > MAX_FILE_BYTES:
@@ -97,6 +109,7 @@ def file_bytes(path: Path) -> bytes:
 
 
 def collect_tree(source: Path, prefix: str, required: tuple[str, ...] = ()) -> dict[str, bytes]:
+    ensure_unlinked_path(source)
     if not source.is_dir() or source.is_symlink():
         raise ValueError(f"Missing or linked source directory: {source}")
     for item in required:
@@ -118,6 +131,7 @@ def collect_tree(source: Path, prefix: str, required: tuple[str, ...] = ()) -> d
 
 def one_asset(root: Path, folder: str, extensions: set[str]) -> Path:
     location = root / folder
+    ensure_unlinked_path(location)
     if not location.is_dir() or location.is_symlink():
         raise ValueError(f"Release requires {location} containing exactly one real asset")
     items = list(location.iterdir())
@@ -133,8 +147,15 @@ def validate_story(path: Path, data: bytes) -> None:
     else:
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
-                if z.read("mimetype") != b"application/epub+zip":
-                    raise ValueError("Story EPUB mimetype is invalid")
+                # The outer ZIP bounds the EPUB's *compressed* bytes, not an
+                # EPUB member's expansion. Never read an unbounded mimetype.
+                expected_mimetype = b"application/epub+zip"
+                member = z.getinfo("mimetype")
+                if member.file_size != len(expected_mimetype):
+                    raise ValueError("Story EPUB mimetype size is invalid")
+                with z.open(member) as stream:
+                    if stream.read(len(expected_mimetype) + 1) != expected_mimetype:
+                        raise ValueError("Story EPUB mimetype is invalid")
                 if "META-INF/container.xml" not in z.namelist():
                     raise ValueError("Story EPUB is missing its container metadata")
         except (zipfile.BadZipFile, KeyError) as err:
@@ -160,26 +181,42 @@ def validate_music(path: Path, data: bytes) -> None:
         raise ValueError(f"Audio {ext} signature is invalid")
 
 
-def create_bonus(root: Path) -> bytes:
-    """Build from THIS checkout's exact module closure, never a stale prebuilt ZIP."""
+def bonus_tool(root: Path) -> dict:
+    """Load the allowlisted source-closure producer without following links."""
+    ensure_unlinked_path(root)
     script = root / "games/close-quarters/tools/package.py"
-    if not script.is_file() or script.is_symlink():
-        raise ValueError("Close Quarters packaging source is missing or linked")
-    for part in ("games", "games/close-quarters", "games/close-quarters/tools"):
-        if (root / part).is_symlink():
-            raise ValueError("Close Quarters source path is linked")
-    bonus = runpy.run_path(str(script))
+    if not script.is_file():
+        raise ValueError("Close Quarters packaging source is missing")
+    file_bytes(script)
+    return runpy.run_path(str(script))
+
+
+def checkout_inputs(root: Path) -> tuple[dict[str, bytes], bytes, bytes, dict[str, bytes]]:
+    """Observe all executable source inputs; recheck before accepting a build."""
+    ensure_unlinked_path(root)
+    game = collect_tree(root / "dist", "Browser-Game", GAME_FILES)
+    dos = file_bytes(root / "games/dos/download/CORPO-DOS.zip")
+    tool_bytes = file_bytes(root / "games/close-quarters/tools/package.py")
+    closure = bonus_tool(root)["closure"](root)
+    return game, dos, tool_bytes, closure
+
+
+def create_bonus(root: Path) -> bytes:
+    """Build from this checkout and independently check the generated ZIP."""
+    bonus = bonus_tool(root)
     with TemporaryDirectory(prefix="corpowars-bonus-") as temp:
         output = Path(temp) / "close-quarters.zip"
         bonus["build"](output, root)
         bonus["verify"](output, root)
         data = file_bytes(output)
-    verify_bonus(data)
+    verify_bonus(data, root)
     return data
 
+def verify_bonus(data: bytes, root: Path | None = None) -> None:
+    """Check structure/receipts; if root is supplied, also prove source equality.
 
-def verify_bonus(data: bytes) -> None:
-    """Check inner archive with no repository checkout or external dependencies."""
+    ZIP-internal SHA-256 receipts are not a trusted authenticity signature.
+    """
     if len(data) > MAX_FILE_BYTES:
         raise ValueError("Close Quarters archive exceeds size bound")
     try:
@@ -211,6 +248,15 @@ def verify_bonus(data: bytes) -> None:
             ).encode("ascii")
             if checksums != expected:
                 raise ValueError("Close Quarters nested SHA-256 receipt mismatch")
+            if root is not None:
+                selected = bonus_tool(root)["closure"](root)
+                wanted = [BONUS_PREFIX + name
+                          for name in sorted((*selected, "SHA256SUMS.txt"))]
+                if names != wanted:
+                    raise ValueError("Close Quarters member set differs from checked-out source closure")
+                for path, payload in selected.items():
+                    if archive.read(BONUS_PREFIX + path) != payload:
+                        raise ValueError(f"Close Quarters member differs from checked-out source: {path}")
     except (zipfile.BadZipFile, KeyError, EOFError) as err:
         raise ValueError("Close Quarters bonus archive is invalid") from err
 
@@ -242,15 +288,20 @@ def make_zip(entries: dict[str, bytes], output: Path, mode: str) -> None:
 def build(root: Path, output: Path, mode: str, assets_root: Path | None = None) -> None:
     if mode not in ("preview", "release"):
         raise ValueError("Mode must be preview or release")
-    entries = collect_tree(root / "dist", "Browser-Game", GAME_FILES)
-    entries["Bonus-DOS/CORPO-DOS.zip"] = file_bytes(root / "games/dos/download/CORPO-DOS.zip")
-    # Release composition is story -> music -> final secret bonus.
+    # Package only bytes observed in this checkout, and fail closed if the
+    # source changes while the two game distributions are being collected.
+    snapshot = checkout_inputs(root)
+    game, dos, _, _ = snapshot
+    entries = dict(game)
+    entries["Bonus-DOS/CORPO-DOS.zip"] = dos
     entries[BONUS_MEMBER] = create_bonus(root)
+    entries[POSTSCRIPT_MEMBER] = POSTSCRIPT.encode()
     entries["START_HERE.txt"] = GUIDE.encode()
     entries["PRICING_AND_RIGHTS.txt"] = RIGHTS.encode()
+    creative: tuple[tuple[Path, bytes], ...] = ()
     if mode == "preview":
-        entries["Story/STORY_PENDING.txt"] = b"NOT FOR SALE: the original story is awaiting author handoff.\n"
-        entries["Music/MUSIC_PENDING.txt"] = b"NOT FOR SALE: the original music track is awaiting composition.\n"
+        entries["Story/STORY_PENDING.txt"] = PREVIEW_STORY
+        entries["Music/MUSIC_PENDING.txt"] = PREVIEW_MUSIC
     else:
         root_assets = assets_root if assets_root is not None else root / "premium/assets"
         story = one_asset(root_assets, "story", STORY_TYPES)
@@ -260,11 +311,28 @@ def build(root: Path, output: Path, mode: str, assets_root: Path | None = None) 
         validate_music(music, music_data)
         entries[f"Story/{story.name}"] = story_data
         entries[f"Music/{music.name}"] = music_data
+        creative = ((story, story_data), (music, music_data))
+    def stable() -> bool:
+        return (checkout_inputs(root) == snapshot
+                and all(file_bytes(path) == data for path, data in creative))
+    if not stable():
+        raise ValueError("Source checkout or creative assets changed during packaging")
     make_zip(entries, output, mode)
-    verify(output)
+    try:
+        verify(output, root)
+        if not stable():
+            raise ValueError("Source checkout or creative assets changed during packaging")
+    except (OSError, ValueError, zipfile.BadZipFile):
+        # Never leave a seemingly finished product after a failed final gate.
+        output.unlink(missing_ok=True)
+        raise
 
+def verify(archive: Path, root: Path | None = ROOT) -> None:
+    """Validate ZIP integrity and optionally its local source provenance.
 
-def verify(archive: Path) -> None:
+    The default and CLI path are source-backed. Pass root=None only when
+    *explicitly* performing receipt-only inspection of a detached archive.
+    """
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
         if (len(names) != len(set(names)) or names != sorted(names)
@@ -283,9 +351,31 @@ def verify(archive: Path) -> None:
                     for i in info
                 )):
             raise ValueError("Nonregular, noncanonical or oversized premium ZIP entry")
-        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt", BONUS_MEMBER}.issubset(names):
+        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt",
+                "PRICING_AND_RIGHTS.txt", "Bonus-DOS/CORPO-DOS.zip",
+                POSTSCRIPT_MEMBER, BONUS_MEMBER}.issubset(names):
             raise ValueError("Missing proof metadata or post-soundtrack bonus")
-        verify_bonus(z.read(BONUS_MEMBER))
+        # Check the archive member names before reading their payloads:
+        # reject unexpected compressed content without decompressing it.
+        story_names = [n for n in names if n.startswith("Story/")]
+        music_names = [n for n in names if n.startswith("Music/")]
+        if root is not None:
+            expected_game = collect_tree(root / "dist", "Browser-Game", GAME_FILES)
+            # Internal manifests/checksums can be regenerated by a repacker.
+            # Anchor the *entire* outer member set to the trusted checkout
+            # and the one validated story/music entry, not just Browser-Game/.
+            allowed_names = (set(expected_game) | set(story_names) | set(music_names) | {
+                "MANIFEST.json", "SHA256SUMS", "START_HERE.txt",
+                "PRICING_AND_RIGHTS.txt", "Bonus-DOS/CORPO-DOS.zip",
+                POSTSCRIPT_MEMBER, BONUS_MEMBER,
+            })
+            unexpected = sorted(set(names) - allowed_names)
+            missing = sorted(allowed_names - set(names))
+            if unexpected or missing:
+                raise ValueError(
+                    f"Outer archive member allowlist mismatch: unexpected={unexpected}, missing={missing}"
+                )
+        verify_bonus(z.read(BONUS_MEMBER), root)
         checksum = z.read("SHA256SUMS")
         expected = b"".join(f"{sha(z.read(n))}  {n}\n".encode() for n in sorted(names) if n != "SHA256SUMS")
         if checksum != expected:
@@ -293,15 +383,37 @@ def verify(archive: Path) -> None:
         manifest = json.loads(z.read("MANIFEST.json"))
         actual = [{"path": n, "bytes": len(z.read(n)), "sha256": sha(z.read(n))}
                   for n in sorted(names) if n not in ("MANIFEST.json", "SHA256SUMS")]
-        if manifest.get("schema") != "corpowars3d-payhip-bundle/1" or manifest.get("contents") != actual:
+        if (not isinstance(manifest, dict)
+                or manifest.get("schema") != "corpowars3d-payhip-bundle/1"
+                or manifest.get("contents") != actual):
             raise ValueError("Manifest does not match payload")
-        if manifest["edition"] == "release":
+        if manifest.get("edition") == "release":
             if (any("PENDING" in n for n in names)
-                    or len([n for n in names if n.startswith("Story/")]) != 1
-                    or len([n for n in names if n.startswith("Music/")]) != 1):
-                raise ValueError("Release missing exactly one story and soundtrack")
-        elif manifest["edition"] != "preview":
+                    or len(story_names) != 1 or len(music_names) != 1
+                    or story_names[0].count("/") != 1 or music_names[0].count("/") != 1
+                    or Path(story_names[0]).suffix.lower() not in STORY_TYPES
+                    or Path(music_names[0]).suffix.lower() not in MUSIC_TYPES):
+                raise ValueError("Release requires exactly one supported story and music file")
+            validate_story(Path(story_names[0]), z.read(story_names[0]))
+            validate_music(Path(music_names[0]), z.read(music_names[0]))
+        elif manifest.get("edition") == "preview":
+            if (story_names != ["Story/STORY_PENDING.txt"]
+                    or music_names != ["Music/MUSIC_PENDING.txt"]
+                    or z.read(story_names[0]) != PREVIEW_STORY
+                    or z.read(music_names[0]) != PREVIEW_MUSIC):
+                raise ValueError("Preview requires exact NOT-FOR-SALE placeholders")
+        else:
             raise ValueError("Invalid edition")
+        if root is not None:
+            for name, payload in expected_game.items():
+                if z.read(name) != payload:
+                    raise ValueError(f"Browser game differs from checked-out distribution: {name}")
+            if z.read("Bonus-DOS/CORPO-DOS.zip") != file_bytes(root / "games/dos/download/CORPO-DOS.zip"):
+                raise ValueError("DOS bonus differs from checked-out distribution")
+            if (z.read("START_HERE.txt") != GUIDE.encode()
+                    or z.read("PRICING_AND_RIGHTS.txt") != RIGHTS.encode()
+                    or z.read(POSTSCRIPT_MEMBER) != POSTSCRIPT.encode()):
+                raise ValueError("Bundle guide or post-soundtrack instructions differ from source")
 
 
 def main() -> int:
@@ -314,8 +426,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.verify:
-            verify(args.verify)
-            print(f"Verified {args.verify} (checksums + manifest)")
+            verify(args.verify, args.root)
+            print(f"Verified {args.verify} (canonical receipts + checked-out source)")
         else:
             build(args.root, args.out, args.mode, args.assets_root)
             print(f"Built and verified {args.mode.upper()} archive: {args.out}")
