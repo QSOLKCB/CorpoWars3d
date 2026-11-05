@@ -31,6 +31,10 @@ update at 10 Hz. Gameplay remains 60 Hz with a bounded catch-up window.
 
 ## Premium Operations OPT / VANILLAJS changes
 
+- Static geometry copies the original 12-float city-builder instance records
+  directly into the retained typed array. The previous slice + atan2 + sine/
+  cosine round trip was redundant. A real seeded district checks Float32
+  parity with the former packing path.
 - Each cuboid batch retains the most recent orientation and reuses the exact
   sine/cosine results for repeated angles (OPT-INV-001 pattern). The underlying
   float32 instance layout, draw order, buffer lifetime and WebGL fallback stay

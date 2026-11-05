@@ -62,6 +62,16 @@ export class Batch {
     }
     v[at+6]=color[0];v[at+7]=color[1];v[at+8]=color[2];v[at+9]=this.rotationCos;v[at+10]=this.rotationSin;v[at+11]=glow;
   }
+  // City builder already supplies packed cosine/sine and color channels.
+  // Copy them exactly; atan2 -> cos/sin reconstruction and slice allocations
+  // would add work while sometimes changing least-significant float bits.
+  encoded(values){
+    if(!values||values.length!==12)throw new RangeError('packed cuboid requires 12 floats');
+    if((this.count+1)*12>this.data.length){
+      const data=new Float32Array(this.data.length*2);data.set(this.data);this.data=data;
+    }
+    this.data.set(values,this.count++*12);
+  }
 }
 export class Renderer {
   constructor(canvas,world){
@@ -122,7 +132,7 @@ export class Renderer {
   setWorld(world){
     if(this.world===world)return;this.world=world;
     const city=buildCity(world);this.static.clear();
-    for(const v of city.boxes)this.static.box(v[0],v[1],v[2],v[3],v[4],v[5],v.slice(6,9),v[11],Math.atan2(v[10],v[9]));
+    for(const v of city.boxes)this.static.encoded(v);
     this.upload(this.static,true);this.setSigns(city.signs);
   }
   resize(quality){

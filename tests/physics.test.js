@@ -3,6 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ballisticStep,JUMP_IMPULSE,GRAVITY} from '../src/physics.js';
 import {Batch} from '../src/renderer.js';
+import {buildCity} from '../src/city.js';
+import {createWorld} from '../src/simulation.js';
 test('ballistic trajectory is invariant under a split integration interval',()=>{
   for(const [y,v,dt] of [[0,JUMP_IMPULSE,1/60],[.4,2.1,.05],[1,-2,.01]]){
     const whole=ballisticStep(y,v,dt);
@@ -35,4 +37,16 @@ test('rotation cache retains exact instance data and clears per batch',()=>{
   assert.ok(batch.data.length>=angles.length*12);
   batch.clear();assert.equal(batch.count,0);assert.equal(batch.rotationEvaluations,0);
   batch.box(0,0,0,1,1,1,[1,1,1],0,.5);assert.equal(batch.rotationEvaluations,2);
+});
+
+test('encoded static city geometry retains prior packed float32 instance parity',()=>{
+  const world=createWorld(7229,3),boxes=buildCity(world).boxes,gl={createBuffer:()=>({})};
+  const old=new Batch(gl,boxes.length),packed=new Batch(gl,boxes.length);
+  for(const v of boxes){
+    old.box(v[0],v[1],v[2],v[3],v[4],v[5],v.slice(6,9),v[11],Math.atan2(v[10],v[9]));
+    packed.encoded(v);
+  }
+  assert.equal(old.count,packed.count);
+  assert.deepEqual(packed.data.subarray(0,packed.count*12),old.data.subarray(0,old.count*12));
+  assert.throws(()=>packed.encoded([1,2,3]),RangeError);
 });
