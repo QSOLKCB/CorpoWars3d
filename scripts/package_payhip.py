@@ -11,7 +11,9 @@ import argparse
 import hashlib
 import io
 import json
+import runpy
 import sys
+from tempfile import TemporaryDirectory
 import wave
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -23,6 +25,11 @@ MAX_TOTAL_BYTES = 1024 * 1024 * 1024
 GAME_FILES = ("index.html", "style.css", "icon.svg", "sw.js", "LICENSE", "NOTICE")
 STORY_TYPES = {".epub", ".pdf"}
 MUSIC_TYPES = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
+# Deliberately sorts after Story/ and Music/: the secret bonus is last.
+BONUS_MEMBER = "ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip"
+BONUS_PREFIX = "CORPOWARS-CLOSE-QUARTERS/"
+BONUS_INDEX = BONUS_PREFIX + "games/close-quarters/index.html"
+BONUS_CHECKSUMS = BONUS_PREFIX + "SHA256SUMS.txt"
 GUIDE = """CORPOWARS3D: PREMIUM OPERATIONS
 Four bodies. One conscience. No shareholders were consulted.
 
@@ -44,6 +51,15 @@ STORY AND MUSIC
 The release bundle includes one original narrative and one music track.
 The preview bundle has explicit placeholders and is NOT FOR SALE.
 
+AFTER THE MUSIC — SECRET CLOSE QUARTERS BONUS
+Only after finishing the story and soundtrack, extract:
+ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip
+It contains eight compact AFTER//ZERO arenas remade as an offline, solo
+CorpoWars squad FPS. Unzip the nested archive, serve its extracted directory
+over local HTTP, then open:
+CORPOWARS-CLOSE-QUARTERS/games/close-quarters/
+No online account, multiplayer service or payment is required to play.
+
 RIGHTS
 Browser game: Apache-2.0, see Browser-Game/LICENSE and NOTICE.
 Story, music, cover artwork: distinct rights reserved by their respective
@@ -55,7 +71,9 @@ Proposed Payhip price: US$5.00 (owner confirms before manual publication).
 Apache-2.0 software remains available under its existing permissive licence.
 Do not describe the game software itself as exclusively licensed.
 The paid value proposition is the curated offline bundle, DOS bonus, original
-story and original soundtrack (subject to final creator permissions).
+story, original soundtrack and post-soundtrack Close Quarters bonus.
+The Close Quarters source code is Apache-2.0 with the accompanying notices;
+the narrative, music and artwork have separate rights.
 No customer publication or payment processing happens in this build.
 """
 
@@ -142,6 +160,61 @@ def validate_music(path: Path, data: bytes) -> None:
         raise ValueError(f"Audio {ext} signature is invalid")
 
 
+def create_bonus(root: Path) -> bytes:
+    """Build from THIS checkout's exact module closure, never a stale prebuilt ZIP."""
+    script = root / "games/close-quarters/tools/package.py"
+    if not script.is_file() or script.is_symlink():
+        raise ValueError("Close Quarters packaging source is missing or linked")
+    for part in ("games", "games/close-quarters", "games/close-quarters/tools"):
+        if (root / part).is_symlink():
+            raise ValueError("Close Quarters source path is linked")
+    bonus = runpy.run_path(str(script))
+    with TemporaryDirectory(prefix="corpowars-bonus-") as temp:
+        output = Path(temp) / "close-quarters.zip"
+        bonus["build"](output, root)
+        bonus["verify"](output, root)
+        data = file_bytes(output)
+    verify_bonus(data)
+    return data
+
+
+def verify_bonus(data: bytes) -> None:
+    """Check inner archive with no repository checkout or external dependencies."""
+    if len(data) > MAX_FILE_BYTES:
+        raise ValueError("Close Quarters archive exceeds size bound")
+    try:
+        with zipfile.ZipFile(io.BytesIO(data), "r") as archive:
+            names = archive.namelist()
+            if (len(names) < 8 or len(names) > 80 or names != sorted(names)
+                    or len(set(names)) != len(names)
+                    or any(not n.startswith(BONUS_PREFIX)
+                           or not valid_name(n[len(BONUS_PREFIX):]) for n in names)):
+                raise ValueError("Noncanonical Close Quarters archive member set/order")
+            if BONUS_INDEX not in names or BONUS_CHECKSUMS not in names:
+                raise ValueError("Close Quarters entrypoint or checksums missing")
+            allowed_bytes = 10 * 1024 * 1024
+            if any(
+                i.is_dir() or i.file_size > 500_000 or i.date_time != FIXED_TIME
+                or i.compress_type != zipfile.ZIP_DEFLATED
+                or i.create_system != 3 or i.external_attr != (0o100644 << 16)
+                for i in archive.infolist()
+            ):
+                # ZIP payload hashes do not bind the Unix file type metadata.
+                # A member marked as a symlink may disappear during extraction.
+                raise ValueError("Nonregular, noncanonical or oversized Close Quarters ZIP entry")
+            if sum(i.file_size for i in archive.infolist()) > allowed_bytes:
+                raise ValueError("Close Quarters uncompressed files exceed size bound")
+            checksums = archive.read(BONUS_CHECKSUMS)
+            expected = "".join(
+                f"{sha(archive.read(n))}  {n[len(BONUS_PREFIX):]}\n"
+                for n in names if n != BONUS_CHECKSUMS
+            ).encode("ascii")
+            if checksums != expected:
+                raise ValueError("Close Quarters nested SHA-256 receipt mismatch")
+    except (zipfile.BadZipFile, KeyError, EOFError) as err:
+        raise ValueError("Close Quarters bonus archive is invalid") from err
+
+
 def make_zip(entries: dict[str, bytes], output: Path, mode: str) -> None:
     if not all(valid_name(name) for name in entries):
         raise ValueError("Unsafe archive member")
@@ -171,6 +244,8 @@ def build(root: Path, output: Path, mode: str, assets_root: Path | None = None) 
         raise ValueError("Mode must be preview or release")
     entries = collect_tree(root / "dist", "Browser-Game", GAME_FILES)
     entries["Bonus-DOS/CORPO-DOS.zip"] = file_bytes(root / "games/dos/download/CORPO-DOS.zip")
+    # Release composition is story -> music -> final secret bonus.
+    entries[BONUS_MEMBER] = create_bonus(root)
     entries["START_HERE.txt"] = GUIDE.encode()
     entries["PRICING_AND_RIGHTS.txt"] = RIGHTS.encode()
     if mode == "preview":
@@ -192,10 +267,25 @@ def build(root: Path, output: Path, mode: str, assets_root: Path | None = None) 
 def verify(archive: Path) -> None:
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
-        if len(names) != len(set(names)) or any(not valid_name(n) for n in names):
-            raise ValueError("Duplicate or unsafe archive entries")
-        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt"}.issubset(names):
-            raise ValueError("Missing proof metadata")
+        if (len(names) != len(set(names)) or names != sorted(names)
+                or not names or names[-1] != BONUS_MEMBER
+                or any(not valid_name(n) for n in names)):
+            # Sorting in the original writer is part of the product contract:
+            # the surprise bonus MUST appear after the story and soundtrack.
+            raise ValueError("Duplicate, unordered or unsafe archive entries")
+        info = z.infolist()
+        if (len(info) > 5000 or sum(i.file_size for i in info) > MAX_TOTAL_BYTES
+                or any(
+                    i.is_dir() or i.file_size > MAX_FILE_BYTES
+                    or i.date_time != FIXED_TIME
+                    or i.compress_type != zipfile.ZIP_DEFLATED
+                    or i.create_system != 3 or i.external_attr != (0o100644 << 16)
+                    for i in info
+                )):
+            raise ValueError("Nonregular, noncanonical or oversized premium ZIP entry")
+        if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt", BONUS_MEMBER}.issubset(names):
+            raise ValueError("Missing proof metadata or post-soundtrack bonus")
+        verify_bonus(z.read(BONUS_MEMBER))
         checksum = z.read("SHA256SUMS")
         expected = b"".join(f"{sha(z.read(n))}  {n}\n".encode() for n in sorted(names) if n != "SHA256SUMS")
         if checksum != expected:
@@ -206,8 +296,10 @@ def verify(archive: Path) -> None:
         if manifest.get("schema") != "corpowars3d-payhip-bundle/1" or manifest.get("contents") != actual:
             raise ValueError("Manifest does not match payload")
         if manifest["edition"] == "release":
-            if any("PENDING" in n for n in names) or not any(n.startswith("Story/") for n in names) or not any(n.startswith("Music/") for n in names):
-                raise ValueError("Release missing paid creative assets")
+            if (any("PENDING" in n for n in names)
+                    or len([n for n in names if n.startswith("Story/")]) != 1
+                    or len([n for n in names if n.startswith("Music/")]) != 1):
+                raise ValueError("Release missing exactly one story and soundtrack")
         elif manifest["edition"] != "preview":
             raise ValueError("Invalid edition")
 
