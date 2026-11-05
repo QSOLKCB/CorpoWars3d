@@ -61,7 +61,7 @@ function begin(index=sector){
   $('sectorTitle').textContent=SECTORS[index].name;
   sound.start();sound.setVolume(.32);sound.setMusicVolume(.10);sound.play('start');
   renderHUD();drawTactical(game,$('miniMap'));
-  canvas.focus({preventScroll:true});requestCapture();
+  canvas.focus({preventScroll:true});notify('CLICK THE GAME VIEW TO CAPTURE MOUSE · ARROWS TO AIM');
 }
 function requestCapture(){
   if(!active||game.tactical||paused||document.pointerLockElement===canvas)return;
@@ -73,14 +73,14 @@ function setPause(value){
   paused=Boolean(value);game.paused=paused;clearInput();
   $('pausePanel').hidden=!paused;
   if(paused){hadLock=false;document.exitPointerLock?.();sound.stopMusic();}
-  else if(!game.tactical){canvas.focus({preventScroll:true});requestCapture();}
+  else if(!game.tactical){canvas.focus({preventScroll:true});}
 }
 function toggleMap(value=!game.tactical){
   if(!active||paused||finished)return;
   const open=Boolean(value);setTactical(game,open);clearInput();
   $('mapPanel').hidden=!open;
   if(open){hadLock=false;document.exitPointerLock?.();drawTactical(game,$('tacticalCanvas'),{labels:true});}
-  else {canvas.focus({preventScroll:true});requestCapture();}
+  else {canvas.focus({preventScroll:true});notify('CLICK THE GAME VIEW TO CAPTURE MOUSE');}
 }
 function selectAgent(index){
   if(!active||paused||finished)return;
