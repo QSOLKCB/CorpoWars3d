@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {FixedClock} from './vendor/time.js';
 import {createCampaign,decodeCampaign,MISSIONS,WEAPONS,RESEARCH,equip,research,canResearch,missionUnlocked,settleMission} from './campaign.js';
-import {recordChallenges} from './challenges.js';
+import {CHALLENGES,recordChallenges} from './challenges.js';
 import {visibleGuard,lineOfSight} from './simulation.js';
 import {createOperation,activeAgent,switchAgent,nextAgent,setTactical,selectSquad,command,objective,update,look,reload,SCALE,STEP,COLORS} from './fps.js';
 import {Renderer} from './renderer.js';
@@ -89,7 +89,7 @@ function complete(){
   if(g.phase==='won'){reward=settleMission(campaign,g.missionIndex,'won');medals=recordChallenges(campaign,g);saveCampaign();sound.play('collateral');}
   else sound.play('end');
   $('pauseTitle').textContent=g.phase==='won'?'CONTRACT CLOSED.':'LINK TERMINATED.';
-  $('pauseText').textContent=g.phase==='won'?`${g.agents.filter(a=>a.hp>0).length} agents extracted in ${Math.floor(g.time/60)}:${String(Math.floor(g.time%60)).padStart(2,'0')}. ${g.kills} security units neutralised. ${reward?`${reward.toLocaleString()} credits transferred.`:'Contract already paid.'} ${medals.length?`Medals: ${medals.join(', ')}.`:'No medals this time.'}`:g.log[0]?.text||'All agents have been lost.';
+  $('pauseText').textContent=g.phase==='won'?`${g.agents.filter(a=>a.hp>0).length} agents extracted in ${Math.floor(g.time/60)}:${String(Math.floor(g.time%60)).padStart(2,'0')}. ${g.kills} security units neutralised. ${reward?`${reward.toLocaleString()} credits transferred.`:'Contract already paid.'} ${medals.length?`Medals: ${medals.map(id=>CHALLENGES.find(c=>c.id===id)?.name??id).join(', ')}.`:'No medals this time.'}`:g.log[0]?.text||'All agents have been lost.';
   $('resume').hidden=false;$('resume').firstChild.textContent='RETURN TO HEADQUARTERS ';$('pause').hidden=false;devices?.refresh();
 }
 function renderHQ(){

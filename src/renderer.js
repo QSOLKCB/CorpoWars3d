@@ -45,14 +45,22 @@ function program(gl,vs,fs){
   for(const s of shaders)gl.deleteShader(s);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));return p;
 }
-class Batch {
-  constructor(gl,capacity=1024){this.gl=gl;this.data=new Float32Array(capacity*12);this.count=0;this.buffer=gl.createBuffer();this.capacity=0;this.expanded=null;}
-  clear(){this.count=0;return this;}
+export class Batch {
+  constructor(gl,capacity=1024){this.gl=gl;this.data=new Float32Array(capacity*12);this.count=0;this.buffer=gl.createBuffer();this.capacity=0;this.expanded=null;this.rotationAngle=null;this.rotationCos=1;this.rotationSin=0;this.rotationEvaluations=0;}
+  clear(){this.count=0;this.rotationAngle=null;this.rotationEvaluations=0;return this;}
   box(x,y,z,w,h,d,color,glow=0,angle=0){
     if((this.count+1)*12>this.data.length){const data=new Float32Array(this.data.length*2);data.set(this.data);this.data=data;}
     const at=this.count++*12,v=this.data;
     v[at]=x;v[at+1]=y;v[at+2]=z;v[at+3]=w;v[at+4]=h;v[at+5]=d;
-    v[at+6]=color[0];v[at+7]=color[1];v[at+8]=color[2];v[at+9]=Math.cos(angle);v[at+10]=Math.sin(angle);v[at+11]=glow;
+    // OPT-INV: contiguous cuboids reuse orientations with exact float32 parity.
+    // Object.is preserves signed zero and NaN semantics.
+    if(!Object.is(angle,this.rotationAngle)){
+      this.rotationAngle=angle;
+      this.rotationCos=angle===0?1:Math.cos(angle);
+      this.rotationSin=angle===0?angle:Math.sin(angle);
+      if(angle!==0)this.rotationEvaluations+=2;
+    }
+    v[at+6]=color[0];v[at+7]=color[1];v[at+8]=color[2];v[at+9]=this.rotationCos;v[at+10]=this.rotationSin;v[at+11]=glow;
   }
 }
 export class Renderer {
@@ -163,8 +171,9 @@ export class Renderer {
     gl.uniformMatrix4fv(this.uniform.vp,false,vp);gl.uniform3fv(this.uniform.eye,eye);gl.uniform1f(this.uniform.fog,1);
     gl.uniform1f(this.uniform.clock,time);this.draw(this.static);
     const batch=this.dynamic.clear();
-    for(const u of [...g.agents,...g.guards])if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha);
-    if(g.courier?.active)this.unit(batch,{...g.courier,team:'guard',enemyType:'witness'},g.time,alpha);
+    for(const u of g.agents)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha);
+    for(const u of g.guards)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha);
+    if(g.courier?.active)this.unit(batch,g.courier,g.time,alpha);
     for(const [i,key] of ['relay','vault','exit'].entries()){
       const p=g[key],c=p.done?PALETTE.teal:i===1&&!g.relay.done?[.25,.29,.32]:i===2?PALETTE.teal:PALETTE.gold;
       if(key!=='exit'){

@@ -5,6 +5,7 @@ import {createGame, tick, startGame, walkable, nearestWalkable, findPath,
   message, objectiveDuration, orderEscort, cycleMode} from './simulation.js';
 import {createCampaign} from './campaign.js';
 import {clamp, forward, rayBox, boxAt} from './math.js';
+import {ballisticStep,JUMP_IMPULSE} from './physics.js';
 export const SCALE = 2.5, STEP = 1/60, RADIUS = .13;
 export const COLORS = [[.35,.93,.82],[.98,.71,.29],[.59,.72,1],[.91,.55,.40]];
 export function createOperation(campaign=createCampaign(), index=campaign.mission) {
@@ -114,9 +115,9 @@ export function moveDirect(g,input,dt) {
       if(freeAt(g.world,a.x,a.y+dy/steps))a.y+=dy/steps;
     }
   }
-  if(input.jump&&a.elevation===0){a.vy=4.3;}
-  a.elevation=Math.max(0,a.elevation+a.vy*dt);a.vy-=11*dt;
-  if(a.elevation===0)a.vy=0;
+  if(input.jump&&a.elevation===0){a.vy=JUMP_IMPULSE;}
+  const airborne=ballisticStep(a.elevation,a.vy,dt);
+  a.elevation=airborne.elevation;a.vy=airborne.velocity;
   a.directMoving=a.x!==oldX||a.y!==oldY||a.elevation!==oldElevation||a.elevation>0;
 }
 export function command(g,kind,point=aimPoint(g)) {
@@ -179,7 +180,7 @@ export function update(g,input={},dt=STEP) {
     if(dx*dx+dy*dy>1e-8)a.yaw=Math.atan2(dx,-dy);
     else if(a.target!=null){const t=g.guards.find(e=>e.id===a.target);if(t)a.yaw=Math.atan2(t.x-a.x,a.y-t.y);}
     // A released agent settles safely to ground before its next direct view.
-    if(a.elevation>0){a.elevation=Math.max(0,a.elevation+(a.vy||0)*dt);a.vy=(a.vy||0)-11*dt;if(!a.elevation)a.vy=0;}
+    if(a.elevation>0){const airborne=ballisticStep(a.elevation,a.vy||0,dt);a.elevation=airborne.elevation;a.vy=airborne.velocity;}
   }
   g.hit=Math.max(0,g.hit-dt);g.recoil=Math.max(0,g.recoil-dt*6);
   for(let i=g.tracers.length-1;i>=0;i--)if((g.tracers[i].life-=dt)<=0)g.tracers.splice(i,1);
