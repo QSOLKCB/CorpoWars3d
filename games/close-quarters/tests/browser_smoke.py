@@ -76,6 +76,32 @@ def main():
         page.wait_for_timeout(180)
         assert page.evaluate("window.compactQA.game.time") > 0
         assert page.evaluate("window.compactQA.renderer.stats.draws") >= 1
+        if os.environ.get("BONUS_ALL_SECTORS") == "1":
+            # The private QA harness checks each of the eight authored scenes
+            # without mutating real players' local saves or overriding progression
+            # logic in the shipped runtime.
+            page.evaluate("""() => localStorage.setItem(
+                'corpowars-close-quarters-v1',
+                JSON.stringify({version:1, unlocked:7, best:Array(8).fill(null)})
+            )""")
+            page.reload(wait_until="networkidle")
+            page.wait_for_function("Boolean(window.compactQA?.renderer)")
+            assert page.locator(".sector:disabled").count() == 0
+            expected_enemy_rosters = [6, 8, 8, 9, 10, 11, 12, 9]
+            for index, count in enumerate(expected_enemy_rosters):
+                page.evaluate("(index) => window.compactQA.begin(index)", index)
+                page.wait_for_function(
+                    "(index) => window.compactQA.game?.bonus.sector === index",
+                    arg=index,
+                )
+                assert page.evaluate("window.compactQA.game.world.size") == 24
+                assert page.evaluate("window.compactQA.game.guards.length") == count
+                assert page.evaluate("window.compactQA.game.agents.length") == 4
+                assert page.evaluate("window.compactQA.game.phase") == "active"
+                page.wait_for_timeout(50)
+                assert page.evaluate("window.compactQA.renderer.stats.draws") >= 1
+                assert not page.locator("#fatal").is_visible()
+            print("BONUS EIGHT-SECTOR SMOKE: all 8 playable author layouts, renderer and rosters PASS")
         assert not errors, f"Browser errors: {errors}"
         assert not outside, f"Nonlocal requests: {outside}"
         browser.close()

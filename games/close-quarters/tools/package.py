@@ -27,11 +27,11 @@ IMPORT = re.compile(r"""\bfrom\s*['"]([^'"]+)['"]|^\s*import\s*['"]([^'"]+)['"]"
 ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 
-def source(path: str) -> bytes:
+def source(path: str, root: Path = ROOT) -> bytes:
     key = PurePosixPath(path)
     if key.is_absolute() or ".." in key.parts or not path or "\\" in path:
         raise ValueError(f"Unsafe archive path: {path!r}")
-    candidate = ROOT
+    candidate = root
     for part in key.parts:
         candidate /= part
         if candidate.is_symlink():
@@ -44,8 +44,8 @@ def source(path: str) -> bytes:
     return data
 
 
-def closure() -> dict[str, bytes]:
-    selected: dict[str, bytes] = {name: source(name) for name in FRONT}
+def closure(root: Path = ROOT) -> dict[str, bytes]:
+    selected: dict[str, bytes] = {name: source(name, root) for name in FRONT}
     work = [ENTRY]
     while work:
         path = work.pop()
@@ -55,7 +55,7 @@ def closure() -> dict[str, bytes]:
             raise ValueError(f"Unapproved module boundary: {path}")
         if not path.endswith(".js") or len(selected) > 80:
             raise ValueError(f"Invalid module graph: {path}")
-        data = source(path)
+        data = source(path, root)
         selected[path] = data
         text = data.decode("utf-8")
         if re.search(r"\bimport\s*\(", text):
@@ -98,21 +98,21 @@ def info(name: str) -> zipfile.ZipInfo:
     return entry
 
 
-def build(dest: Path) -> str:
-    files = closure()
+def build(dest: Path, root: Path = ROOT) -> str:
+    files = closure(root)
     files["SHA256SUMS.txt"] = manifest(files)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for name, data in sorted(files.items()):
             z.writestr(info(name), data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
-    verify(dest)
+    verify(dest, root)
     digest = hashlib.sha256(dest.read_bytes()).hexdigest()
     print(f"Built {dest} ({len(files)} entries) SHA-256 {digest}")
     return digest
 
 
-def verify(dest: Path) -> None:
-    selected = closure()
+def verify(dest: Path, root: Path = ROOT) -> None:
+    selected = closure(root)
     expected = dict(selected)
     expected["SHA256SUMS.txt"] = manifest(selected)
     with zipfile.ZipFile(dest, "r") as z:

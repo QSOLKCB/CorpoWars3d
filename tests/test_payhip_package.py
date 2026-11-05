@@ -10,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from package_payhip import build, verify
+from package_payhip import build, verify, BONUS_MEMBER, verify_bonus, make_zip
 
 class PackageTests(unittest.TestCase):
     def setUp(self):
@@ -25,6 +25,22 @@ class PackageTests(unittest.TestCase):
         dos = self.root / "games/dos/download"
         dos.mkdir(parents=True)
         (dos / "CORPO-DOS.zip").write_bytes(b"fixture DOS archive")
+        # Minimal, real static-module closure under an isolated fixture root.
+        bonus = self.root / "games/close-quarters"
+        (bonus / "src").mkdir(parents=True)
+        for name in ("index.html", "style.css", "README.md", "NOTICE"):
+            (bonus / name).write_text("fixture: " + name)
+        (bonus / "src/main.js").write_text(
+            "import {entry} from '../../../src/main.js';\nexport {entry};\n"
+        )
+        src = self.root / "src"
+        src.mkdir()
+        (src / "main.js").write_text("export const entry = true;\n")
+        for name in ("LICENSE", "NOTICE"):
+            (self.root / name).write_text("fixture: " + name)
+        source_tool = Path(__file__).resolve().parent.parent / "games/close-quarters/tools/package.py"
+        (bonus / "tools").mkdir()
+        (bonus / "tools/package.py").write_bytes(source_tool.read_bytes())
         self.assets = self.root / "premium/assets"
         (self.assets / "story").mkdir(parents=True)
         (self.assets / "music").mkdir(parents=True)
@@ -39,6 +55,11 @@ class PackageTests(unittest.TestCase):
             self.assertIn("Story/STORY_PENDING.txt", z.namelist())
             self.assertIn("Music/MUSIC_PENDING.txt", z.namelist())
             self.assertEqual(json.loads(z.read("MANIFEST.json"))["edition"], "preview")
+            self.assertIn(BONUS_MEMBER, z.namelist())
+            self.assertEqual(z.namelist()[-1], BONUS_MEMBER,
+                             "Secret bonus must appear after music/story")
+            verify_bonus(z.read(BONUS_MEMBER))
+            self.assertIn(b"AFTER THE MUSIC", z.read("START_HERE.txt"))
 
     def test_release_rejects_absent_or_bad_creative_assets(self):
         out = self.root / "release.zip"
@@ -69,7 +90,56 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(json.loads(z.read("MANIFEST.json"))["edition"], "release")
             self.assertFalse(any("PENDING" in n for n in z.namelist()))
             self.assertTrue(any(n.endswith("Fiction.epub") for n in z.namelist()))
+            self.assertTrue(any(n.endswith("Theme.wav") for n in z.namelist()))
+            self.assertEqual(z.namelist()[-1], BONUS_MEMBER)
+            verify_bonus(z.read(BONUS_MEMBER))
         verify(one)
+
+    def test_release_blocked_if_bonus_source_is_missing(self):
+        (self.root / "games/close-quarters/src/main.js").unlink()
+        with self.assertRaises((FileNotFoundError, ValueError)):
+            build(self.root, self.root / "missing-bonus.zip", "preview")
+
+    def test_source_change_invalidates_the_bonus_and_outer_receipt(self):
+        one, two = self.root / "source-one.zip", self.root / "source-two.zip"
+        build(self.root, one, "preview")
+        (self.root / "src/main.js").write_text("export const entry = 42;\n")
+        build(self.root, two, "preview")
+        with zipfile.ZipFile(one) as a, zipfile.ZipFile(two) as b:
+            self.assertNotEqual(a.read(BONUS_MEMBER), b.read(BONUS_MEMBER))
+            self.assertNotEqual(a.read("MANIFEST.json"), b.read("MANIFEST.json"))
+        self.assertNotEqual(one.read_bytes(), two.read_bytes())
+
+    def test_repacked_bogus_bonus_is_rejected_even_with_matching_outer_receipt(self):
+        original, altered = self.root / "original.zip", self.root / "altered.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as z:
+            body = {n: z.read(n) for n in z.namelist()
+                    if n not in ("MANIFEST.json", "SHA256SUMS")}
+        body[BONUS_MEMBER] = b"not a playable archive"
+        make_zip(body, altered, "preview")
+        with self.assertRaises(ValueError):
+            verify(altered)
+
+    def test_nested_bonus_tampering_is_rejected_even_with_outer_receipts_updated(self):
+        original, altered = self.root / "original.zip", self.root / "altered.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as z:
+            body = {n: z.read(n) for n in z.namelist()
+                    if n not in ("MANIFEST.json", "SHA256SUMS")}
+        old = body[BONUS_MEMBER]
+        with zipfile.ZipFile(io.BytesIO(old)) as nested:
+            entries = {n: nested.read(n) for n in nested.namelist()}
+        name = next(n for n in entries if n.endswith("games/close-quarters/src/main.js"))
+        entries[name] += b"/* injected */"
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as nested:
+            for name, data in sorted(entries.items()):
+                nested.writestr(name, data)
+        body[BONUS_MEMBER] = stream.getvalue()
+        make_zip(body, altered, "preview")
+        with self.assertRaises(ValueError):
+            verify(altered)
 
     def test_symlink_cannot_leak_files_into_bundle(self):
         target = self.root / "secret.txt"

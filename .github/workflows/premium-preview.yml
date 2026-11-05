@@ -9,7 +9,7 @@ permissions:
 jobs:
   preview:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,6 +21,7 @@ jobs:
       - name: Verify engine and payhip packaging without dependencies
         run: |
           node --test tests/*.test.js
+          node --test games/close-quarters/tests/*.test.js
           node scripts/check.js
           python -m unittest discover -s tests -p 'test_*.py' -v
           node scripts/build.js
@@ -36,6 +37,19 @@ jobs:
           python scripts/package_payhip.py --verify premium/out/preview-1.zip
           sha256sum premium/out/preview-1.zip > premium/out/PREVIEW.sha256
           rm premium/out/preview-2.zip
+      - name: Install pinned CI-only Chromium for integrated bonus verification
+        run: |
+          python -m pip install uv==0.13.5
+          uvx --from playwright==1.56.0 playwright install --with-deps chromium
+      - name: Extract premium ZIP and smoke-test post-soundtrack game itself
+        env:
+          BONUS_ALL_SECTORS: '1'
+          BONUS_SCREENSHOT_DIR: test-results
+          BONUS_ROOT: premium/out/unpacked/bonus/CORPOWARS-CLOSE-QUARTERS
+        run: |
+          python -m zipfile -e premium/out/preview-1.zip premium/out/unpacked
+          python -m zipfile -e premium/out/unpacked/ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip premium/out/unpacked/bonus
+          uv run --no-project --with playwright==1.56.0 python games/close-quarters/tests/browser_smoke.py
       - name: Upload NOT-FOR-SALE preview for owner review
         uses: actions/upload-artifact@v4
         with:
@@ -44,4 +58,6 @@ jobs:
             premium/out/preview-1.zip
             premium/out/PREVIEW.sha256
             test-results/premium-opt.json
+            test-results/bonus-fps.png
+            test-results/bonus-tactical.png
           if-no-files-found: error
