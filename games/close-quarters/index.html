@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#08141b">
+<meta name="description" content="Close Quarters: eight handcrafted AFTER//ZERO sectors under CorpoWars squad control. Offline single-player bonus game.">
+<title>CorpoWars: Close Quarters — Bonus Game</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<canvas id="view" tabindex="0" aria-label="Cyberpunk first-person game viewport"></canvas>
+<div class="grain" aria-hidden="true"></div>
+<div class="brand"><strong>QSOL<span>///</span>IMC</strong><span>CORPOWARS / CLOSE QUARTERS</span><b>OFFLINE · SOLO</b></div>
+<section id="home" class="overlay" aria-labelledby="homeTitle">
+  <div class="panel hero">
+    <div class="eyebrow">BONUS GAME / CORPORATE ASSET SEIZURE</div>
+    <h1 id="homeTitle">CLOSE <em>QUARTERS</em></h1>
+    <p class="tagline">Smaller streets. Faster decisions. Four bodies, one conscience.</p>
+    <p class="intro">Eight handcrafted AFTER//ZERO operations, CorpoWars' four-agent squad and tactical combat, and neon-lit corporate architecture. No lobbies, no servers, no waiting for packets.</p>
+    <div class="rule"></div>
+    <p class="eyebrow">SELECT CONTRACT</p>
+    <div id="sectorList" class="sectors" aria-label="Compact sectors"></div>
+    <p id="sectorBrief" class="brief"></p>
+    <div class="deployRow">
+      <label for="difficulty">SECURITY RESPONSE
+        <select id="difficulty"><option value="relaxed">STANDARD / RELAXED</option><option value="hostile">HOSTILE / NO QUARTER</option></select>
+      </label>
+      <button class="primary" id="launch">DEPLOY FOUR-AGENT SQUAD <span aria-hidden="true">↗</span></button>
+    </div>
+    <p class="fine" id="saveNote">Local campaign progress only.</p>
+    <details class="controls"><summary>OPERATIONS MANUAL / CONTROLS</summary>
+      <p><b>Move</b> WASD / Shift sprint / Ctrl crouch / J jump. <b>Aim</b> mouse, or arrow keys when pointer capture is unavailable. <b>Fight</b> left mouse or Space fire, right mouse ADS, R reload, B hold chrono.</p>
+      <p><b>Squad</b> 1–4 direct pilot, Q next, Tab/M live tactical map. F follow, G advance to aim, H hold, V hold fire, X EMP, C heal, Z panic. P/Esc pause. In the map, click terrain to move, or a visible hostile to focus fire.</p>
+      <p>No network connection, online account or multiplayer is required. The browser version runs through a local HTTP server to load ES modules.</p>
+    </details>
+  </div>
+</section>
+<section id="hud" class="hud" hidden aria-label="Mission status">
+  <div class="topline"><div><small>SECTOR / OPERATION</small><strong id="sectorTitle"></strong></div>
+    <div><small>HOSTILE RESPONSE</small><strong id="enemyCount">—</strong></div>
+    <div><small>ELAPSED</small><strong id="timeCount">0.0s</strong></div>
+    <button id="pauseButton" class="tiny">PAUSE / P</button>
+    <button id="mapButton" class="tiny" aria-pressed="false">TACTICAL / TAB</button>
+  </div>
+  <div class="crosshair" aria-hidden="true"><span></span><span></span></div>
+  <div class="bottomline">
+    <div class="rosterBlock"><small>FOUR BODIES / ONE CONSCIENCE</small><div id="roster" class="roster"></div></div>
+    <div class="statusBlock">
+      <small id="agentTitle"></small><strong id="agentStats"></strong>
+      <small id="objective"></small><div class="objectiveBar"><span id="objectiveProgress">0%</span></div>
+      <div class="chronoHead"><small id="chronoLabel">CHRONO RESERVE · HOLD B</small><span id="chronoValue">100%</span></div>
+      <div class="chronoBar"><div id="chronoFill"></div></div>
+      <p id="notification" role="status" aria-live="polite"></p>
+    </div>
+    <div class="mini"><small>SECTOR MAP</small><canvas id="miniMap" width="224" height="224" aria-label="Tactical mini map"></canvas></div>
+  </div>
+</section>
+<section id="mapPanel" class="overlay mapOverlay" hidden aria-labelledby="mapTitle">
+  <div class="panel mapPanel">
+    <div class="panelTop"><div class="eyebrow">LIVE TACTICAL CONTROL / AI ACTIVE</div><h2 id="mapTitle">THE CITY DOES NOT STOP</h2></div>
+    <canvas id="tacticalCanvas" width="600" height="600" aria-label="Click terrain to move the squad; click a hostile to focus fire"></canvas>
+    <div class="orders">
+      <button id="selectAll">ALL AGENTS</button><button id="selectPilot">ACTIVE PILOT</button>
+      <button data-command="follow">FOLLOW</button><button data-command="hold">HOLD</button>
+      <button data-command="fire">HOLD FIRE</button><button data-command="emp">EMP</button>
+      <button data-command="heal">PATCH</button><button data-command="panic">PANIC</button>
+      <button id="closeMap" class="primary">RETURN TO FPS / TAB</button>
+    </div>
+    <p class="fine">The unpiloted squad operates autonomously while you direct movement. Click a visible hostile for focus fire.</p>
+  </div>
+</section>
+<section id="pausePanel" class="overlay modal" hidden aria-labelledby="pauseTitle">
+  <div class="panel dialog"><div class="eyebrow">LOCAL SYSTEM / PAUSED</div><h2 id="pauseTitle">CORPORATE TIMEOUT</h2>
+  <p>Deterministic simulation suspended. All held input cleared.</p>
+  <div class="dialogActions"><button id="resume" class="primary">RESUME</button><button id="retry">RESTART SECTOR</button><button id="quit">CONTRACT BOARD</button></div></div>
+</section>
+<section id="resultPanel" class="overlay modal" hidden aria-labelledby="resultTitle">
+  <div class="panel dialog"><div class="eyebrow">AFTER ACTION / RECEIPT</div><h2 id="resultTitle">CONTRACT CLOSED</h2><p id="resultText"></p>
+  <div class="dialogActions"><button id="next" class="primary">NEXT SECTOR</button><button id="retryEnd">REPLAY CONTRACT</button><button id="homeEnd">CONTRACT BOARD</button></div></div>
+</section>
+<section id="fatal" class="overlay modal" hidden role="alert"><div class="panel dialog"><h2>UPLINK UNAVAILABLE</h2><p id="fatalText"></p><p>Use a modern browser with Canvas 2D support and serve the game over HTTP.</p></div></section>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

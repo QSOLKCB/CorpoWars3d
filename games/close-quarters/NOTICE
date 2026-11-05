@@ -1,0 +1,36 @@
+CorpoWars: Close Quarters — bonus game provenance
+SPDX-License-Identifier: Apache-2.0
+
+Copyright and contributor notices remain in the repository root LICENSE
+and NOTICE, both included verbatim in the standalone archive. Selling an
+optional curated bundle does not revoke recipients' Apache-2.0 permissions.
+
+DONOR 1 — AFTER//ZERO (QSOLKCB/AFTER-ZERO)
+File: public/src/maps.js
+Exact imported blob SHA-1: 6023c6bdaa428b99dadc9ffb22cee9bbc358cec7
+Included unchanged as: games/close-quarters/src/maps.js
+Authored campaign sector geometry, enemy placements, relays, palettes and
+map validation. No imported AFTER//ZERO cloud, multiplayer, Next.js,
+database, account, networking or telemetry code.
+
+DONOR 2 — CorpoWars3d (QSOLKCB/CorpoWars3d)
+Files: src/fps.js, src/simulation.js, src/campaign.js, src/renderer.js,
+src/city.js, src/audio.js and their transitive local modules.
+The bonus imports the active in-repository modules rather than copying
+the main game or modifying original mission logic. Existing repository
+NOTICE records provenance of these adapted sources.
+
+ENGINEERING REFERENCES
+QSOLKCB/VANILLAJS — fixed-step, retained-capacity and navigation correctness.
+QSOLKCB/OPT — invariant-driven reuse and predeclared performance budget
+methodology (OPT-INV-001, OPT-BUDGET-001).
+These references do not assert a certified performance speedup.
+
+NEW WORK
+games/close-quarters/src/sector.js — deterministic tile-to-rectangle
+transplant, authored roster adapter and bonus-only progression;
+games/close-quarters/src/map.js — tactical display;
+games/close-quarters/src/main.js — standalone UI/input/fixed-step loop;
+games/close-quarters/index.html, style.css, tests, and ZIP builder.
+No separately authored short story, lyrics, music samples, or private
+Payhip assets are present.
