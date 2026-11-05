@@ -193,9 +193,15 @@ def verify_bonus(data: bytes) -> None:
             if BONUS_INDEX not in names or BONUS_CHECKSUMS not in names:
                 raise ValueError("Close Quarters entrypoint or checksums missing")
             allowed_bytes = 10 * 1024 * 1024
-            if any(i.is_dir() or i.file_size > 500_000 or i.date_time != FIXED_TIME
-                   or i.compress_type != zipfile.ZIP_DEFLATED for i in archive.infolist()):
-                raise ValueError("Noncanonical or oversized Close Quarters ZIP entry")
+            if any(
+                i.is_dir() or i.file_size > 500_000 or i.date_time != FIXED_TIME
+                or i.compress_type != zipfile.ZIP_DEFLATED
+                or i.create_system != 3 or i.external_attr != (0o100644 << 16)
+                for i in archive.infolist()
+            ):
+                # ZIP payload hashes do not bind the Unix file type metadata.
+                # A member marked as a symlink may disappear during extraction.
+                raise ValueError("Nonregular, noncanonical or oversized Close Quarters ZIP entry")
             if sum(i.file_size for i in archive.infolist()) > allowed_bytes:
                 raise ValueError("Close Quarters uncompressed files exceed size bound")
             checksums = archive.read(BONUS_CHECKSUMS)
@@ -261,8 +267,22 @@ def build(root: Path, output: Path, mode: str, assets_root: Path | None = None) 
 def verify(archive: Path) -> None:
     with zipfile.ZipFile(archive) as z:
         names = z.namelist()
-        if len(names) != len(set(names)) or any(not valid_name(n) for n in names):
-            raise ValueError("Duplicate or unsafe archive entries")
+        if (len(names) != len(set(names)) or names != sorted(names)
+                or not names or names[-1] != BONUS_MEMBER
+                or any(not valid_name(n) for n in names)):
+            # Sorting in the original writer is part of the product contract:
+            # the surprise bonus MUST appear after the story and soundtrack.
+            raise ValueError("Duplicate, unordered or unsafe archive entries")
+        info = z.infolist()
+        if (len(info) > 5000 or sum(i.file_size for i in info) > MAX_TOTAL_BYTES
+                or any(
+                    i.is_dir() or i.file_size > MAX_FILE_BYTES
+                    or i.date_time != FIXED_TIME
+                    or i.compress_type != zipfile.ZIP_DEFLATED
+                    or i.create_system != 3 or i.external_attr != (0o100644 << 16)
+                    for i in info
+                )):
+            raise ValueError("Nonregular, noncanonical or oversized premium ZIP entry")
         if not {"MANIFEST.json", "SHA256SUMS", "START_HERE.txt", BONUS_MEMBER}.issubset(names):
             raise ValueError("Missing proof metadata or post-soundtrack bonus")
         verify_bonus(z.read(BONUS_MEMBER))

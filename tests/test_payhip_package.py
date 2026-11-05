@@ -141,6 +141,47 @@ class PackageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify(altered)
 
+    def test_reordered_premium_archive_rejected_with_original_receipts(self):
+        original, altered = self.root / "canonical.zip", self.root / "reversed.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as src, zipfile.ZipFile(altered, "w") as dst:
+            for info in reversed(src.infolist()):
+                dst.writestr(info, src.read(info))
+        with self.assertRaisesRegex(ValueError, "unordered"):
+            verify(altered)
+
+    def test_symlink_metadata_in_nested_bonus_is_rejected(self):
+        original, altered = self.root / "canonical.zip", self.root / "symlink-bonus.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as outer:
+            entries = {n: outer.read(n) for n in outer.namelist()
+                       if n not in ("MANIFEST.json", "SHA256SUMS")}
+        stream = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(entries[BONUS_MEMBER])) as nested, zipfile.ZipFile(stream, "w") as dst:
+            for info in nested.infolist():
+                payload = nested.read(info)
+                if info.filename.endswith("games/close-quarters/src/main.js"):
+                    info.external_attr = 0o120777 << 16
+                dst.writestr(info, payload)
+        entries[BONUS_MEMBER] = stream.getvalue()
+        # Re-sign every outer receipt: only the nested ZIP's file-type metadata
+        # changes. Payload hashes alone must not make it appear safe to extract.
+        make_zip(entries, altered, "preview")
+        with self.assertRaisesRegex(ValueError, "Nonregular"):
+            verify(altered)
+
+    def test_symlink_metadata_in_outer_zip_is_rejected(self):
+        original, altered = self.root / "canonical.zip", self.root / "symlink-outer.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as src, zipfile.ZipFile(altered, "w") as dst:
+            for info in src.infolist():
+                payload = src.read(info)
+                if info.filename == "Browser-Game/src/main.js":
+                    info.external_attr = 0o120777 << 16
+                dst.writestr(info, payload)
+        with self.assertRaisesRegex(ValueError, "Nonregular"):
+            verify(altered)
+
     def test_symlink_cannot_leak_files_into_bundle(self):
         target = self.root / "secret.txt"
         target.write_text("DO NOT BUNDLE")
