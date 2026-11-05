@@ -24,6 +24,10 @@ jobs:
           node scripts/check.js
           python -m unittest discover -s tests -p 'test_*.py' -v
           node scripts/build.js
+      - name: Record OPT CPU preparation A/B characterization (no timing gate)
+        run: |
+          mkdir -p test-results
+          node scripts/benchmark_premium.mjs --out test-results/premium-opt.json
       - name: Build identical preview ZIP twice
         run: |
           python scripts/package_payhip.py --mode preview --out premium/out/preview-1.zip
@@ -39,4 +43,5 @@ jobs:
           path: |
             premium/out/preview-1.zip
             premium/out/PREVIEW.sha256
+            test-results/premium-opt.json
           if-no-files-found: error
