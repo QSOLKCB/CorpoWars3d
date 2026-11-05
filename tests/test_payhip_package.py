@@ -72,7 +72,7 @@ class PackageTests(unittest.TestCase):
             prefix = "CORPOWARS-CLOSE-QUARTERS/"
             receipt = prefix + "SHA256SUMS.txt"
             payloads[receipt] = "".join(
-                f"{hashlib.sha256(payload).hexdigest()}  {name[len(prefix):]}\\n"
+                f"{hashlib.sha256(payload).hexdigest()}  {name[len(prefix):]}\n"
                 for name, payload in sorted(payloads.items()) if name != receipt
             ).encode("ascii")
         out = io.BytesIO()
@@ -179,7 +179,7 @@ class PackageTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(body[BONUS_MEMBER])) as nested:
             script = nested.read(path)
         for desc, changes, removed, error in (
-            ("changed", {path: script + b"// changed\\n"}, (), "differs from checked-out source"),
+            ("changed", {path: script + b"// changed\n"}, (), "differs from checked-out source"),
             ("missing", {}, (path,), "member set differs from checked-out source"),
         ):
             with self.subTest(case=desc):
