@@ -9,7 +9,7 @@
 - Offline-capable browser FPS with local progress, no account, no remote textures, no game engine.
 - **Dividend Zero**: separate DOSBox-ready 16-bit demake as a bonus.
 - **One original short-story booklet and one original music track**, created independently and incorporated only after the author's storyboard/story handoff and the final song session.
-- **Secret post-soundtrack bonus — Close Quarters**: eight AFTER//ZERO 24×24 arenas transplanted onto the CorpoWars four-agent squad FPS, with an independent local-save namespace, chrono and an offline gameplay ZIP. It is the **last item in the product**, after the book and soundtrack, under `ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip`.
+- **Secret post-soundtrack bonus — Close Quarters**: eight AFTER//ZERO 24×24 arenas transplanted onto the CorpoWars four-agent squad FPS, with an independent local-save namespace, chrono and an offline gameplay ZIP. The customer-facing `START_HERE.txt` deliberately does not spoil it; instructions reside in `ZZ-POST-SOUNDTRACK-BONUS/00-AFTER_THE_MUSIC.txt`. The gameplay ZIP is the **last archive member**, after the story and music, at `ZZ-POST-SOUNDTRACK-BONUS/CORPOWARS-CLOSE-QUARTERS.zip`.
 
 ## Exact producer sequence
 
@@ -17,7 +17,7 @@
 2. Merge the independently authored storyboard/story work, review its thematic and factual continuity, then perform the narrative bridge. Do not overwrite the other author's creative files.
 3. Compose the soundtrack after the book, and present **Close Quarters only after the music** as the final secret bonus. Keep soundtrack licensing and rights distinct from the Apache-2.0 game code.
 4. Place final assets **locally** in `premium/assets/story/` (exactly one **.epub** or **.pdf**) and `premium/assets/music/` (exactly one **.wav**, **.flac**, **.mp3**, **.ogg** or **.m4a**). Put original creative assets outside the public Git repository to avoid giving the paid extras away.
-5. Build and inspect the final package locally. The builder must generate the Close Quarters bonus **from the exact checkout's own source**, nest it as the final item after `Music/`, verify *both* layers of SHA-256 receipts and reject a missing/corrupt bonus. Confirm owner rights, price, store cover art, screenshots, and ebook/music quality.
+5. Build and inspect the final package locally from a **quiescent, trusted checkout**. The builder generates Close Quarters from its checked-out ES-module closure, checks both layers of SHA-256 receipts, compares the ZIP members to checked-out source bytes, and rejects missing/corrupt modules or source changes observed during packaging. It refuses linked roots and ancestors. The bonus ZIP must remain the final entry after `Music/`. Confirm owner rights, price, store cover art, screenshots, and ebook/music quality.
    The premium preview has explicit story/music placeholders and must never be sold as the final product.
 6. Create a Payhip digital download product for US$5.00 **manually**, attach the fully verified release ZIP and publish only on explicit owner approval. GitHub Actions **never uploads** to Payhip.
 
@@ -37,7 +37,9 @@ python3 scripts/package_payhip.py --verify premium/out/CorpoWars3d-Premium-Opera
 sha256sum premium/out/CorpoWars3d-Premium-Operations.zip
 ```
 
-The public GitHub Actions workflow builds **preview only** (with conspicuous placeholder notices), checks the included post-soundtrack Close Quarters bonus from source, validates its nested SHA-256 manifest, launches the nested game in Chromium and verifies two byte-identical ZIPs. `--mode release` is intentionally blocked until both real creative assets are available, with format checks, SHA-256 receipt and duplicate/path checks. ZIP entries use fixed timestamps, sorted paths and fixed compression; byte equality is checked in CI, but compiler/browser cross-device parity is a distinct test.
+The public GitHub Actions workflow builds **preview only** (with conspicuous placeholder notices), checks the post-soundtrack Close Quarters bonus against the checked-out source closure, validates its nested SHA-256 manifest, launches the nested game in Chromium, and verifies two byte-identical ZIPs. `--mode release` is intentionally blocked until both creative assets are available; both the builder and verifier enforce one supported top-level story file and soundtrack, validating basic container/header structure rather than copyright or creative quality. ZIP entries have canonical timestamps, file types, sorted paths and compression.
+
+**Integrity is not authenticity:** internal SHA-256 receipts and `MANIFEST.json` are generated from the archive's own contents, so someone who repacks a ZIP can regenerate them. `--verify` therefore compares the archive's games, DOS package, guides and Close Quarters module closure against the trusted local checkout (`--root` defaults to this repository). Do not call a detached archive independently authenticated without a trusted checkout or external signed digest. The packaging source-stability recheck detects observed changes but is not an OS-level atomic snapshot: do not change or swap the worktree during a build. Build from an immutable commit/worktree when preparing a sale. Compiler/browser cross-device parity is a distinct test.
 
 No Node package installation is required; Node is existing test/build tooling and Python uses the standard library. This file does not authorize publishing, refunds, copyright claims over Apache code or price changes.
 
@@ -62,9 +64,9 @@ These are **mission prompts, not canonical prose**. The book's independent story
 - The main browser game's packaged WebGL smoke passes at the exact Git head.
 - Close Quarters' eight-sector authored geometry and enemy placements pass deterministic unit tests.
 - The integrated premium ZIP contains `Browser-Game/`, `Bonus-DOS/`, final `Story/`, final `Music/`, and `ZZ-POST-SOUNDTRACK-BONUS/` **after** Story/Music (not merely a README reference).
-- Both outer and nested inner archives have valid cryptographic receipts. Mutations of either layer are rejected, and regenerating on unchanged source yields byte-identical ZIPs.
+- Both outer and nested inner archives have valid SHA-256 receipts **and** match the trusted checkout. Self-resigned mutations, removed modules, nonregular metadata and unexpected content are rejected in source-backed verification. Regenerating on unchanged source yields byte-identical ZIPs.
 - The included Close Quarters executable launches **from the extracted nested ZIP** in Chromium with no outbound requests. A standalone ZIP green run is not enough.
-- The release builder rejects missing creative files, malformed input formats, symlinks, missing bonus sources, and archive tampering; do not publish the NOT-FOR-SALE preview.
+- The release builder and verifier reject missing or unsupported creative files, malformed PDF/EPUB or audio headers, symlinked roots/ancestors, missing bonus modules, changed source inputs, and archive tampering. `START_HERE.txt` must not disclose the final bonus; post-music instructions live alongside it. Do not publish the NOT-FOR-SALE preview.
 - Owner reviews the final epub/pdf and actual recorded song, checks the storefront presentation and price, and explicitly authorizes publication. CI cannot inspect the private creative assets until supplied.
 
 ## Licensing and release boundaries
