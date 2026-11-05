@@ -100,6 +100,17 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn(b"ZZ-POST-SOUNDTRACK", z.read("START_HERE.txt"))
             self.assertIn(b"CLOSE QUARTERS", z.read(POSTSCRIPT_MEMBER))
 
+    def test_missing_postmusic_instructions_rejected_even_with_fresh_receipts(self):
+        original, altered = self.root / "canonical.zip", self.root / "no-postscript.zip"
+        build(self.root, original, "preview")
+        with zipfile.ZipFile(original) as z:
+            body = {n: z.read(n) for n in z.namelist()
+                    if n not in ("MANIFEST.json", "SHA256SUMS", POSTSCRIPT_MEMBER)}
+        make_zip(body, altered, "preview")
+        # Even receipt-only inspection must enforce the required product shape.
+        with self.assertRaisesRegex(ValueError, "Missing proof metadata"):
+            verify(altered, root=None)
+
     def test_release_rejects_absent_or_bad_creative_assets(self):
         out = self.root / "release.zip"
         with self.assertRaises(ValueError):
