@@ -269,7 +269,7 @@ class PackageTests(unittest.TestCase):
                     payloads = {n: z.read(n) for n in z.namelist()
                                 if n not in ("MANIFEST.json", "SHA256SUMS")}
                 for extra in ("Bonus-DOS/INSTALL.cmd",
-                              "ZZ-POST-SOUNDTRACK-BONUS/EXTRA.cmd",
+                              "ZZ-POST-SOUNDTRACK-BONUS/01_EXTRA.cmd",
                               "CUSTOM/RUN_ME.sh"):
                     with self.subTest(edition=edition, unexpected=extra):
                         altered = self.root / "resigned-extra.zip"
