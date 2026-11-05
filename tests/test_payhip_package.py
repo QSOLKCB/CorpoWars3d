@@ -257,6 +257,62 @@ class PackageTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, expected):
                     verify(altered, self.root)
 
+    def test_source_backed_allowlist_rejects_resigned_extra_outer_files(self):
+        # Recreate the PR review's executable injection with fully valid
+        # self-issued receipts; check both the preview and saleable release.
+        self.valid_creative()
+        for edition in ("preview", "release"):
+            with self.subTest(edition=edition):
+                original = self.root / f"authentic-{edition}.zip"
+                build(self.root, original, edition, self.assets)
+                with zipfile.ZipFile(original) as z:
+                    payloads = {n: z.read(n) for n in z.namelist()
+                                if n not in ("MANIFEST.json", "SHA256SUMS")}
+                for extra in ("Bonus-DOS/INSTALL.cmd",
+                              "ZZ-POST-SOUNDTRACK-BONUS/EXTRA.cmd",
+                              "CUSTOM/RUN_ME.sh"):
+                    with self.subTest(edition=edition, unexpected=extra):
+                        altered = self.root / "resigned-extra.zip"
+                        forged = dict(payloads)
+                        forged[extra] = b"untrusted executable"
+                        make_zip(forged, altered, edition)
+                        # A detached, receipts-only check is not an authenticity check.
+                        verify(altered, root=None)
+                        with self.assertRaisesRegex(ValueError, "Outer archive member allowlist mismatch"):
+                            verify(altered, self.root)
+
+    def test_oversized_epub_mimetype_is_rejected_before_decompression(self):
+        self.valid_creative()
+        canonical, forged = self.root / "release.zip", self.root / "bomb-release.zip"
+        build(self.root, canonical, "release", self.assets)
+        # Highly compressible, small-on-disk EPUB with an 8 MiB mimetype member.
+        # The verifier must check ZipInfo.file_size before opening this member.
+        crafted = io.BytesIO()
+        with zipfile.ZipFile(crafted, "w", compression=zipfile.ZIP_DEFLATED) as epub:
+            epub.writestr("mimetype", b"X" * (8 * 1024 * 1024))
+            epub.writestr("META-INF/container.xml", "<container/>")
+        self.assertLess(len(crafted.getvalue()), 100_000)
+        with zipfile.ZipFile(canonical) as z:
+            payloads = {n: z.read(n) for n in z.namelist()
+                        if n not in ("MANIFEST.json", "SHA256SUMS")}
+        payloads["Story/Fiction.epub"] = crafted.getvalue()
+        make_zip(payloads, forged, "release")
+        # Also prove source-backed check never calls z.open on a huge mimetype.
+        original_open = zipfile.ZipFile.open
+
+        def reject_large_mimetype_open(archive, name, mode="r", pwd=None, *, force_zip64=False):
+            member_name = name if isinstance(name, str) else name.filename
+            if member_name == "mimetype":
+                raise AssertionError("oversized EPUB mimetype was opened")
+            return original_open(archive, name, mode=mode, pwd=pwd, force_zip64=force_zip64)
+
+        with mock.patch.object(zipfile.ZipFile, "open", reject_large_mimetype_open):
+            with self.assertRaisesRegex(ValueError, "Story EPUB mimetype size is invalid"):
+                verify(forged, self.root)
+        (self.assets / "story/Fiction.epub").write_bytes(crafted.getvalue())
+        with self.assertRaisesRegex(ValueError, "Story EPUB mimetype size is invalid"):
+            build(self.root, self.root / "invalid-epub.zip", "release", self.assets)
+
     def test_reordered_premium_archive_rejected_with_original_receipts(self):
         original, altered = self.root / "canonical.zip", self.root / "reversed.zip"
         build(self.root, original, "preview")
