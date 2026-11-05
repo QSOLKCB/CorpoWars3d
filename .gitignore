@@ -1,6 +1,7 @@
+.DS_Store
 dist/
-.openai/
-node_modules/
 test-results/
-
 __pycache__/
+.pytest_cache/
+premium/out/
+premium/assets/
