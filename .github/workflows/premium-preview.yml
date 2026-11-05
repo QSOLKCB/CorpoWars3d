@@ -1,0 +1,47 @@
+name: Premium bundle preview / OPT gate
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify engine and payhip packaging without dependencies
+        run: |
+          node --test tests/*.test.js
+          node scripts/check.js
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          node scripts/build.js
+      - name: Record OPT CPU preparation A/B characterization (no timing gate)
+        run: |
+          mkdir -p test-results
+          node scripts/benchmark_premium.mjs --out test-results/premium-opt.json
+      - name: Build identical preview ZIP twice
+        run: |
+          python scripts/package_payhip.py --mode preview --out premium/out/preview-1.zip
+          python scripts/package_payhip.py --mode preview --out premium/out/preview-2.zip
+          cmp premium/out/preview-1.zip premium/out/preview-2.zip
+          python scripts/package_payhip.py --verify premium/out/preview-1.zip
+          sha256sum premium/out/preview-1.zip > premium/out/PREVIEW.sha256
+          rm premium/out/preview-2.zip
+      - name: Upload NOT-FOR-SALE preview for owner review
+        uses: actions/upload-artifact@v4
+        with:
+          name: CorpoWars3d-Premium-PREVIEW-NOT-FOR-SALE
+          path: |
+            premium/out/preview-1.zip
+            premium/out/PREVIEW.sha256
+            test-results/premium-opt.json
+          if-no-files-found: error

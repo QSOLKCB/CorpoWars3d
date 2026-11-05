@@ -1,4 +1,4 @@
 {
-  "name": "corpowars3d", "version": "0.2.0", "private": true, "type": "module",
+  "name": "corpowars3d", "version": "0.3.0", "private": true, "type": "module",
   "scripts": {"test":"node --test tests/*.test.js", "check":"node scripts/check.js", "build":"node scripts/build.js", "bench":"node scripts/benchmark.js"}
 }

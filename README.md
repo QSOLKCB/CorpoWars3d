@@ -130,10 +130,18 @@ extraction: press E after release to keep selected agents escorting them.
 
 The six original contracts unlock in order: Hostile Takeover, Ghost Shift,
 Boardroom Blackout, Signal Siege, Witness Protection and Golden Parachute.
+**Premium Operations** extends that sequence with **Black Dividend**
+(the Dividend Grid public-ledger broadcast and defended transmitter) and
+**Proxy Election** (Apex Consolidated's register recovery and timed lockdown).
+The new districts have their own seeded neon palettes and rooftop signal crowns;
+visual props never change the collision/cover map. This expansion adds no paid
+runtime unlock and preserves the original campaign save format.
 The hold-out waves, courier escort and lockdown deadline retain CorpoWars'
 original rules. Headquarters includes the original weapons, AUG conversions,
 medical research, augmentations, panic upgrades and difficulty selection.
-Rewards are paid once per contract. Campaign saves use a separate, validated
+Rewards are paid once per contract. Optional medals also recognise zero-kill
+extraction and four-agent survival on Hostile; they never mint credits or change
+weapon balance. Campaign saves use a separate, validated
 CorpoWars3d storage key. Returning to headquarters abandons an unfinished run;
 only between-contract campaign progress is saved.
 
@@ -170,6 +178,11 @@ reset cooldown. Campaign saves and purchased upgrades remain compatible.
   WebGL 1 without instancing expands geometry into retained vertex buffers.
 - VANILLAJS' fixed clock runs gameplay at 60 Hz with bounded catch-up and
   interpolated presentation. The original binary-heap routing workspace is kept.
+- OPT invariant-driven rotation reuse avoids repeated trigonometry when cuboids
+  have unchanged angles, preserving Float32 instance data; ordinary frames avoid
+  allocating temporary concatenated squad/guard arrays.
+- Ground-level jump trajectories use exact constant-acceleration integration
+  across fixed steps, retaining the original cover/occupancy model.
 - Cover rays reuse one private scratch box, reading every building field fresh;
   no per-building box/array allocation or approximate arithmetic is required.
 - DOM references are retained, unchanged world-label text is reused and hidden
@@ -205,6 +218,24 @@ orientations. CI browser screenshots and telemetry are retained as artifacts.
 The Pages workflow validates before deployment. For first publication, set
 repository **Settings → Pages → Source → GitHub Actions**, then merge to main or
 run **Deploy GitHub Pages**. Implementation PRs do not merge or publish themselves.
+
+## Payhip collector bundle (staged, not published)
+
+[Premium release and creative handoff plan](docs/PREMIUM_RELEASE.md) documents
+the proposed **US$5** product, with the upgraded FPS, the included DOS bonus,
+an independently authored short-story booklet and a future original song.
+The Python standard-library packaging script makes a deterministic, locally
+verifiable ZIP containing a SHA-256 manifest. GitHub Actions publishes a
+**NOT-FOR-SALE preview artifact only**; story and music remain outside the
+public repo until final authorised packaging. The release mode is blocked
+unless both real media assets are supplied. Neither CI nor the script interacts
+with Payhip or processes payments.
+
+```sh
+node scripts/build.js
+python3 scripts/package_payhip.py --mode preview --out premium/out/PREVIEW.zip
+python3 scripts/package_payhip.py --verify premium/out/PREVIEW.zip
+```
 
 ## License
 

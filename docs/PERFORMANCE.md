@@ -29,6 +29,30 @@ path cache that might alias distinct origins. Follow paths update at most once
 per 0.6 s. Map terrain rebuilds on world replacement; dynamic maps and DOM status
 update at 10 Hz. Gameplay remains 60 Hz with a bounded catch-up window.
 
+## Premium Operations OPT / VANILLAJS changes
+
+- Static geometry copies the original 12-float city-builder instance records
+  directly into the retained typed array. The previous slice + atan2 + sine/
+  cosine round trip was redundant. A real seeded district checks Float32
+  parity with the former packing path.
+- Each cuboid batch retains the most recent orientation and reuses the exact
+  sine/cosine results for repeated angles (OPT-INV-001 pattern). The underlying
+  float32 instance layout, draw order, buffer lifetime and WebGL fallback stay
+  unchanged. The regression suite compares all instance trigonometry fields to
+  native `Math.sin/Math.cos`, including signed zero and mixed angles.
+- Removed a temporary combined actors array and per-frame courier spread from
+  the hot rendering path. Actor sequence and materials are preserved.
+- Pure `ballisticStep()` uses the closed-form constant acceleration equation
+  for vertical jump motion. Separate position and velocity are tested for
+  fixed-step partition invariance and exact floor clamping.
+- The additional two missions reuse existing deterministic layouts and objective
+  rule kinds; decorative roof crown instances do not change collision bounds.
+- `scripts/benchmark_premium.mjs` compares CPU instance preparation on
+  identical fixed fixtures, alternating measurement order and recording source
+  hashes. It is a characterization, not an FPS certification or GPU measurement.
+  Do not assert speedups or frame-time gains until comparable GPU/browser runs
+  include actual frame timing, uploads, allocations and workload parity.
+
 ## Bounded local arithmetic experiment
 
 Run `node scripts/benchmark.js --write` to regenerate `PERFORMANCE_LOCAL.json`.

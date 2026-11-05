@@ -226,6 +226,8 @@ export function createGame(seed, campaign = createCampaign(), missionIndex = cam
   const mission = MISSIONS[missionIndex] || MISSIONS[0];
   const difficulty=DIFFICULTIES[campaign.difficulty]||DIFFICULTIES.relaxed;
   const world = createWorld(seed ?? mission.seed, mission.layout), upgrades = [...campaign.research];
+  // Presentation-only theme; collision, cover and navigation never inspect it.
+  world.visualTheme = mission.visualTheme ?? 'standard';
   const point = ([x,y])=>({x,y,progress:0,done:false});
   const game = {
     mission, missionIndex, upgrades, difficulty,

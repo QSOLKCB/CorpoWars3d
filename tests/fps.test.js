@@ -11,7 +11,7 @@ function fixture(){
   const e=g.guards[0];g.guards=[e];Object.assign(e,{x:8.5,y:5.5,prevX:8.5,prevY:5.5,hp:100,maxHp:100,cooldown:999,home:{x:8.5,y:5.5},think:999,path:[]});
   return g;
 }
-test('six contracts retain their campaign identities',()=>{assert.equal(MISSIONS.length,6);for(let i=0;i<6;i++){const g=createOperation(createCampaign(),i);assert.equal(g.mission,MISSIONS[i]);assert.equal(g.agents.length,4);assert.equal(g.controlled,0);}});
+test('six original contracts keep their identities; expansion adds two operations',()=>{assert.equal(MISSIONS.length,8);assert.deepEqual(MISSIONS.slice(0,6).map(m=>m.id),['breakwater','foundry','spire','copperline','coldstore','exchange']);for(let i=0;i<MISSIONS.length;i++){const g=createOperation(createCampaign(),i);assert.equal(g.mission,MISSIONS[i]);assert.equal(g.agents.length,4);assert.equal(g.controlled,0);}});
 test('direct agent does not acquire or fire automatically; AI still does',()=>{
   const g=fixture();g.agents[1].x=9;g.agents[1].y=6.5;g.agents[1].cooldown=0;
   const ammo=g.agents[0].ammo;update(g,{});assert.equal(g.agents[0].ammo,ammo);assert.ok(g.agents[1].ammo<g.agents[1].magazine);
