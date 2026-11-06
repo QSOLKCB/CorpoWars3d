@@ -5,6 +5,11 @@ import {perspective,view,multiply,transform,mix} from './math.js';
 import {buildCity,PALETTE} from './city.js';
 import {SCALE,COLORS,eyeOf,activeAgent} from './fps.js';
 import {SoftwareRenderer} from './software-renderer.js';
+import {emitCharacter,skinKey,actorVariant,SKINS} from './skins.js';
+// Beyond this distance (metres) characters drop their small detail parts.
+export const CHARACTER_LOD_DISTANCE=38;
+// A struck actor is self-lit for this long (simulation seconds).
+export const HIT_FLASH=.12;
 const CUBE=[];
 for(const [n,v] of [
   [[0,1,0],[[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]]],
@@ -141,25 +146,33 @@ export class Renderer {
     if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;}
     this.gl.viewport(0,0,w,h);return w/h;
   }
-  unit(batch,a,time,alpha){
+  // Track hit points per actor id to flash a character the frame it is hurt.
+  // Presentation only: the simulation already resolved the damage.
+  trackHits(g){
+    if(this.hitGame!==g){this.hitGame=g;this.lastHp=new Map();this.flashUntil=new Map();}
+    const note=u=>{const last=this.lastHp.get(u.id);if(last!==undefined&&u.hp<last)this.flashUntil.set(u.id,g.time+HIT_FLASH);this.lastHp.set(u.id,u.hp);};
+    for(const u of g.agents)note(u);for(const u of g.guards)note(u);if(g.courier)note(g.courier);
+  }
+  unit(batch,a,time,alpha,eye=null){
     const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE;
-    const angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle),friendly=a.team==='agent',dead=a.hp<=0;
-    const color=dead?[.11,.12,.14]:friendly?COLORS[a.id]:a.enemyType==='bulwark'?[.49,.18,.16]:[.36,.26,.27],metal=[.08,.10,.12];
+    const angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle),dead=a.hp<=0,key=skinKey(a);
     const moving=Math.abs(a.x-(a.prevX??a.x))+Math.abs(a.y-(a.prevY??a.y))>.001;
-    const gait=moving?Math.sin(time*12+a.id)*.16:0,base=(a.elevation||0);
-    const crouch=a.stance==='crouch'?.70:1;
-    const box=(dx,y,dz,w,h,d,col,glow=0)=>batch.box(x+dx*c+dz*s,base+y*crouch,z-dx*s+dz*c,w,h*crouch,d,col,glow,angle);
-    if(dead){batch.box(x,.11,z,.65,.2,1.5,[.10,.13,.15],0,angle);return;}
-    // Articulated coat, boots, armour, visor and a separate weapon silhouette.
-    box(-.17,.33,gait,.22,.65,.28,metal);box(.17,.33,-gait,.22,.65,.28,metal);
-    box(-.17,.08,gait-.08,.26,.16,.44,metal);box(.17,.08,-gait-.08,.26,.16,.44,metal);
-    box(0,.83,0,.64,.55,.40,[color[0]*.38,color[1]*.38,color[2]*.38]);
-    box(0,1.23,0,.58,.59,.34,[.14,.18,.21]);box(0,1.34,-.19,.44,.16,.05,color,.4);
-    box(-.39,1.12,-.10,.20,.57,.24,[.12,.16,.18]);box(.36,1.12,-.20,.20,.57,.24,[.12,.16,.18]);
-    box(0,1.69,0,.33,.38,.32,[.23,.27,.29]);box(0,1.73,-.17,.30,.075,.025,friendly?PALETTE.teal:PALETTE.red,1);
-    box(.29,1.1,-.50,.13,.16,.63,metal);box(.29,1.15,-.81,.06,.06,.12,color,.5);
-    if(a.stun>0){box(0,2.1,0,.35,.07,.35,[.35,.6,1],1);}
-    if(friendly)batch.box(x,.025,z,.7,.025,.7,color,.5,angle);
+    const base=a.elevation||0,crouch=a.stance==='crouch'?.70:1;
+    const far=eye&&Math.hypot(x-eye[0],z-eye[2])>CHARACTER_LOD_DISTANCE;
+    const until=this.flashUntil?.get(a.id),flash=!dead&&until!==undefined&&time<until&&until-time<=HIT_FLASH;
+    const box=this.partEmitter||(this.partEmitter=(dx,y,dz,w,h,d,col,glow)=>{
+      const p=this.pose;p.batch.box(p.x+dx*p.c+dz*p.s,p.base+y*p.crouch,p.z-dx*p.s+dz*p.c,w,h*p.crouch,d,col,glow,p.angle);
+    });
+    const p=this.pose||(this.pose={});
+    p.batch=batch;p.x=x;p.z=z;p.c=c;p.s=s;p.base=base;p.crouch=dead?1:crouch;p.angle=angle;
+    const pose=this.characterPose||(this.characterPose={});
+    pose.gait=moving?Math.sin(time*12+a.id):0;pose.dead=dead;pose.lod=far?'low':'high';pose.flash=flash;pose.variant=actorVariant(key,a.id);
+    emitCharacter(box,key,pose);
+    if(dead)return;
+    // Ground ring: squad agents in their accent, the witness in gold.
+    if(a.team==='agent')batch.box(x,.025,z,.7,.025,.7,COLORS[a.id],.5,angle);
+    else if(a.team==='courier')batch.box(x,.025,z,.7,.025,.7,SKINS.witness.accent,.6,angle);
+    if(a.stun>0)batch.box(x,base+2.1*crouch,z,.35,.07,.35,[.35,.6,1],1,angle);
   }
   beam(batch,a,b,width,color){
     const dx=b[0]-a[0],dz=b[2]-a[2],length=Math.hypot(dx,dz);
@@ -180,10 +193,10 @@ export class Renderer {
     gl.clearColor(.055,.09,.12,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(this.p);
     gl.uniformMatrix4fv(this.uniform.vp,false,vp);gl.uniform3fv(this.uniform.eye,eye);gl.uniform1f(this.uniform.fog,1);
     gl.uniform1f(this.uniform.clock,time);this.draw(this.static);
-    const batch=this.dynamic.clear();
-    for(const u of g.agents)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha);
-    for(const u of g.guards)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha);
-    if(g.courier?.active)this.unit(batch,g.courier,g.time,alpha);
+    const batch=this.dynamic.clear();this.trackHits(g);
+    for(const u of g.agents)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha,eye);
+    for(const u of g.guards)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha,eye);
+    if(g.courier?.active)this.unit(batch,g.courier,g.time,alpha,eye);
     for(const [i,key] of ['relay','vault','exit'].entries()){
       const p=g[key],c=p.done?PALETTE.teal:i===1&&!g.relay.done?[.25,.29,.32]:i===2?PALETTE.teal:PALETTE.gold;
       if(key!=='exit'){

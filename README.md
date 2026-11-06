@@ -168,10 +168,46 @@ Hostile retains its 0.65× fear-duration modifier. The button shows ACTIVE,
 remaining cooldown seconds, then READY. Switching agents/selection does not
 reset cooldown. Campaign saves and purchased upgrades remain compatible.
 
+## Character skins
+
+Every person in the district has an original outfit built from the same
+instanced cuboids as the city (`src/skins.js`):
+
+| Character | Look |
+| --- | --- |
+| VEX | Long charcoal coat, teal collar and visor, shoulder pauldron, carbine |
+| NULL | Full-face amber-visor helmet, hazard-banded chest plate, breaching charges, knee pads |
+| ECHO | Deep hood, recon antenna, cape, single blue lens, long scoped rifle |
+| IRON | Open-face helmet, beard, twin pauldrons, ammunition pack, LMG |
+| Security | Issue uniform, peaked cap, badge, belt, red goggles, SMG |
+| Bulwark | Heavy oxblood riot armour, visor slit, red shoulder beacons, breacher |
+| Marksman | Field kit, beret, cape, scope lens, long rifle |
+| Witness | Grey suit, white shirt, gold tie and briefcase on a gold ground ring |
+
+**Colour lookup table.** In the manner of 1980s 8-bit games such as Elite
+(1984), every colour lives once in a shared lookup table and each outfit is
+eight one-byte indices into it. Changing a faction's colours is a table edit.
+
+**Seeded crowds.** Security, Bulwark and Marksman faces and issue uniforms are
+chosen by an Elite-style generator: three 16-bit seed words derived from the
+actor id are "twisted" (`s0, s1, s2 → s1, s2, s0+s1+s2`), and their bytes pick
+skin tone, hair, uniform shade and facial hair from the table. The same guard
+always looks the same; the squad and the Witness are fixed characters. Type
+silhouettes, weapons and red threat accents never vary, so enemies stay readable.
+
+Skins are presentation only. Every standing part stays inside the 1.9 m shot
+volume with heads in the headshot band, so what you see is what the hitscan
+tests. Struck characters flash briefly; beyond 38 m characters drop small
+detail parts, and the software renderer always uses that lower detail.
+
 ## Rendering and optimization
 
 - Static city geometry uploads once per operation. Buildings, windows, kerbs,
   street details and skyline share one instanced draw batch.
+- Skinned characters emit parts through a callback into the retained dynamic
+  batch; variant colours and codes are cached in bounded tables, so steady
+  frames allocate no per-actor arrays. Up close a character is 16–31 cuboids;
+  past 38 m it is 12–15 (the previous model used 16).
 - Articulated agents and effects use a retained dynamic batch; the weapon uses
   a separate retained batch. Original signs share one generated texture atlas.
 - The primary path uses four draws per FPS frame, independent of instance count.

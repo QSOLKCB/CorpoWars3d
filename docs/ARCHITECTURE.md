@@ -33,6 +33,12 @@ projection/view matrices and slab ray-box intersection are used directly.
   its selected recipients, so competing schedulers cannot overwrite their orders.
 - Native and software renderers consume the same state and hit results.
 
+Character skins are pure presentation (`src/skins.js`). Both renderers call
+`emitCharacter`, which emits local cuboids through a callback; colours resolve
+through one lookup table, and enemy variants come from a seeded 16-bit twist of
+the actor id. Skin parts stay inside the 1.9 m × 0.6 m shot volume used by
+`shoot`; tests enforce those bounds for every skin, stride and variant.
+
 Direct shots have a minimum 40 m reach, with a 2× head hit multiplier. Autonomous
 agents retain their original weapon ranges and original target damage. This is
 an intentional FPS balance adaptation, not identical 2D/3D numerical combat.
