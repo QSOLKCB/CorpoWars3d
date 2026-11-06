@@ -18,3 +18,9 @@ The software path uses conventional perspective projection and near clipping;
 the inverse-square-root experiment is the conventional IEEE-754 bit estimate
 with one Newton step, confined to the benchmark. No historical game source is
 included. Syndicate/FreeSynd are genre inspiration only, not asset/code donors.
+
+Character skins (`src/skins.js`) are new work. Sharing one skin data module
+between every renderer follows the pattern used for INERTIA ZERO's hull skins
+in QSOLKCB/GAMES (same author); no GAMES source is copied. The colour lookup
+table and three-word seed "twist" follow techniques publicly described for
+Elite (Acornsoft, 1984); no Elite code, data, seeds or assets are used.

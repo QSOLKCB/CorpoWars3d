@@ -5,6 +5,7 @@
 import {perspective,view,multiply,transform,mix} from './math.js';
 import {SCALE,COLORS,eyeOf,activeAgent} from './fps.js';
 import {lineOfSight} from './simulation.js';
+import {emitCharacter,skinKey,actorVariant,SKINS} from './skins.js';
 const FACES=[
   {n:[0,1,0],p:[[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]]},
   {n:[0,-1,0],p:[[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]},
@@ -80,18 +81,17 @@ export class SoftwareRenderer {
     for(const f of this.faces){c.beginPath();c.moveTo(...f.screen[0]);for(let i=1;i<f.screen.length;i++)c.lineTo(...f.screen[i]);c.closePath();c.fillStyle=f.color;c.fill();this.stats.draws++;}
     this.faces.length=0;
   }
+  // Same skins as WebGL at their low level of detail: the CPU path sorts
+  // every face, so it keeps roughly its previous part budget per character.
   unit(a,time,alpha){
     if(a.hp<=0)return;
-    const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE,angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle),friendly=a.team==='agent';
-    const tint=friendly?COLORS[a.id]:[.59,.26,.22],metal=[.09,.13,.15],base=a.elevation||0,crouch=a.stance==='crouch'?.7:1;
-    const box=(dx,y,dz,w,h,d,col,glow=0)=>this.box(x+dx*c+dz*s,base+y*crouch,z-dx*s+dz*c,w,h*crouch,d,col,glow,angle);
-    const gait=Math.abs(a.x-a.prevX)+Math.abs(a.y-a.prevY)>.001?Math.sin(time*12+a.id)*.13:0;
-    box(-.17,.34,gait,.22,.68,.27,metal);box(.17,.34,-gait,.22,.68,.27,metal);
-    box(0,.95,0,.62,.75,.36,[.14,.20,.23]);box(0,1.3,-.2,.50,.14,.05,tint,.6);
-    box(-.38,1.05,-.05,.18,.60,.23,metal);box(.35,1.05,-.18,.18,.60,.23,metal);
-    box(0,1.69,0,.34,.38,.32,[.23,.28,.30]);box(0,1.73,-.17,.31,.075,.025,tint,1);
-    box(.28,1.10,-.49,.12,.16,.65,metal);
-    if(friendly)this.box(x,.025,z,.65,.025,.65,tint,.7);
+    const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE,angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle);
+    const base=a.elevation||0,crouch=a.stance==='crouch'?.7:1;
+    const moving=Math.abs(a.x-a.prevX)+Math.abs(a.y-a.prevY)>.001,key=skinKey(a);
+    emitCharacter((dx,y,dz,w,h,d,col,glow)=>this.box(x+dx*c+dz*s,base+y*crouch,z-dx*s+dz*c,w,h*crouch,d,col,glow,angle),
+      key,{gait:moving?Math.sin(time*12+a.id):0,dead:false,lod:'low',flash:false,variant:actorVariant(key,a.id)});
+    if(a.team==='agent')this.box(x,.025,z,.65,.025,.65,COLORS[a.id],.7);
+    else if(a.team==='courier')this.box(x,.025,z,.65,.025,.65,SKINS.witness.accent,.7);
   }
   render(g,{alpha=1,menu=false,time=0,quality='high',reduced=false}={}){
     const started=performance.now();
@@ -115,7 +115,7 @@ export class SoftwareRenderer {
       this.stats.cacheMisses=(this.stats.cacheMisses||0)+1;
     }else{c.drawImage(this.backdrop,0,0);this.stats.draws++;this.stats.cacheHits=(this.stats.cacheHits||0)+1;}
     for(const u of [...g.agents,...g.guards])if((menu||u.id!==g.viewId)&&(menu||lineOfSight(g.world,a,u)))this.unit(u,g.time,alpha);
-    if(g.courier?.active&&(menu||lineOfSight(g.world,a,g.courier)))this.unit({...g.courier,team:'guard'},g.time,alpha);
+    if(g.courier?.active&&(menu||lineOfSight(g.world,a,g.courier)))this.unit(g.courier,g.time,alpha);
     for(const [i,key] of ['relay','vault','exit'].entries()){
       const p=g[key],col=p.done||i===2?[.35,.8,.7]:[.95,.65,.28];
       if(!menu&&!lineOfSight(g.world,a,p))continue;
