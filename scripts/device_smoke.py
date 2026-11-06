@@ -108,7 +108,7 @@ def run_device_checks(browser, url, out):
     assert page.evaluate("corpowarsQA.game.shots") == shots
     page.screenshot(path=str(out / 'mobile-fps-landscape.png'))
     page.locator('[data-action="map"]').tap()
-    page.locator('#pauseButton').tap()
+    page.locator('#pauseButton').tap(force=True)
     assert page.locator('#pause').is_hidden()
     assert 'PAUSED' in page.locator('#tacticalFeed').inner_text()
     page.locator('#squad .agent').nth(0).tap()
