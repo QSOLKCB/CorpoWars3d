@@ -3,7 +3,8 @@
 // but movement and trigger input belong to the FPS controller. A pure control
 // stage applies current-tick movement before combat and stationary objectives.
 // The simulation has no DOM, graphics, audio, network, or wall-clock dependencies.
-import { createCampaign, WEAPONS, AUG_MODES, MISSIONS, DIFFICULTIES, ENEMY_TYPES } from './campaign.js';
+import { createCampaign, WEAPONS, AUG_MODES, MISSIONS, DIFFICULTIES, ENEMY_TYPES, reservePatches } from './campaign.js';
+import { capturesComplete, currentObjectiveKey } from './objectives.js';
 export const STEP = 1 / 30;
 export const SIZE = 36;
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -169,7 +170,7 @@ function guard(id, x, y, difficulty = DIFFICULTIES.relaxed, enemyType = 'guard')
   return { id, x, y, prevX: x, prevY: y, home: { x, y }, team: 'guard', enemyType,
     hp, maxHp: hp, speed: difficulty.speed*type.speed, damage: difficulty.damage*type.damage,
     interval: difficulty.interval*type.interval, range: type.range, detection: type.detection, armour: type.armour,
-    cooldown: .8, path: [], target: null, think: 0, stun: 0, fear: 0, patrol: 0 };
+    cooldown: .8, path: [], target: null, focus: null, think: 0, stun: 0, fear: 0, patrol: 0 };
 }
 
 // Extra city encounters are deterministic and finite. Existing squad/combat AI
@@ -210,7 +211,7 @@ function relayResponse(game){
 }
 
 export function objectiveDuration(game,key) {
-  return key==='relay'?(game.mission.relayDuration??3):key==='vault'?(game.mission.vaultDuration??5):2;
+  return key==='relay'?(game.mission.relayDuration??3):key==='vault'?(game.mission.vaultDuration??5):key==='exit'?2:4;
 }
 
 export function configureWeapon(agent, research = [], refill = true) {
@@ -238,7 +239,7 @@ export function createGame(seed, campaign = createCampaign(), missionIndex = cam
       weapon: campaign.loadout[id], mode: campaign.modes[id], path: [], target: null, cooldown: 0, ammo: 12, reload: 0 })),
     guards: mission.guards.map(([x,y,type],i)=>guard(100+i,x,y,difficulty,type)),
     relay: point(mission.relay), vault: point(mission.vault), exit: point(mission.exit),
-    medkits: upgrades.includes('med2')?4:2, healAmount: upgrades.includes('med2')?110:upgrades.includes('med1')?85:55,
+    medkits: (upgrades.includes('med2')?4:2)+reservePatches(campaign), reserveMedkits: reservePatches(campaign), healAmount: upgrades.includes('med2')?110:upgrades.includes('med1')?85:55,
     hackSpeed: upgrades.includes('head')?1.3:1,
     panicActive: 0, panicCooldown: 0, panicRange: upgrades.includes('panic1')?9:7,
     panicDuration: (upgrades.includes('panic2')?11:upgrades.includes('panic1')?8:5)*difficulty.fearScale,
@@ -251,6 +252,15 @@ export function createGame(seed, campaign = createCampaign(), missionIndex = cam
   if(mission.kind==='escort')game.courier={id:300,name:'Witness',team:'courier',x:game.vault.x,y:game.vault.y,
     prevX:game.vault.x,prevY:game.vault.y,active:false,hp:mission.courier.hp,maxHp:mission.courier.hp,
     speed:mission.courier.speed,path:[],armour:0};
+  // Control nodes (CorpoWars): each has a defending guard; later nodes bulwarks.
+  const defenders=new Set(game.guards.map(unit=>Math.floor(unit.y)*world.size+Math.floor(unit.x)));
+  game.captureKeys=(mission.captures??[]).map((position,i)=>{
+    const key=`capture${i+1}`;
+    game[key]={...point(position),label:`CONTROL ${i+(mission.kind==='escort'?2:3)}`};
+    const post=nearestWalkable(world,position[0],position[1],defenders);
+    if(post){defenders.add(Math.floor(post.y)*world.size+Math.floor(post.x));game.guards.push(guard(500+i,post.x,post.y,difficulty,i>1?'bulwark':'guard'));}
+    return key;
+  });
   const occupied=new Set(game.guards.map(e=>Math.floor(e.y)*world.size+Math.floor(e.x)));
   for(let i=0;i<difficulty.extraGuards;i++) {
     const anchor=i<2?game.relay:game.vault,point=nearestWalkable(world,anchor.x+(i%2?2:-2),anchor.y+1,occupied);
@@ -332,6 +342,8 @@ export function medkit(game) {
   const hurt = game.agents.filter(a => a.hp > 0 && a.hp < a.maxHp && game.selected.has(a.id));
   if (!hurt.length) return false;
   for (const a of hurt) a.hp = Math.min(a.maxHp, a.hp + game.healAmount);
+  // Issued patches are spent first; the remainder are campaign reserves.
+  if(game.medkits<=game.reserveMedkits)game.reserveMedkits--;
   game.medkits--;game.metrics.medkitsUsed++; message(game, 'Trauma patch applied to selected agents.', 'heal'); return true;
 }
 
@@ -402,6 +414,19 @@ function move(unit, dt, multiplier = 1) {
   }
 }
 
+// Pursuit routes start towards the next tile. findPath begins at the centre of
+// the unit's own tile, so a guard part-way across it first walked back, away
+// from the player it had just seen. Tile paths are 4-connected and both tiles
+// are walkable, so the direct segment stays inside their shared rectangle.
+export function pursuitPath(world, unit, goal) {
+  const path = findPath(world, unit, goal);
+  if (path.length > 1 && Math.floor(path[0].x) === Math.floor(unit.x) && Math.floor(path[0].y) === Math.floor(unit.y)) path.shift();
+  return path;
+}
+const sameTile = (a, b) => Math.floor(a.x) === Math.floor(b.x) && Math.floor(a.y) === Math.floor(b.y);
+// Minimum spacing between chase re-plans after the first plan for a contact.
+export const THINK_INTERVAL = 1.1, REPLAN_INTERVAL = .25;
+
 function updateEscortOrders(game,dt) {
   const courier=game.courier;
   if(!courier?.active||courier.hp<=0)return;
@@ -457,6 +482,7 @@ export function tick(game, dt = STEP, applyControl = null) {
     const inRange = e => e.hp > 0 && distance(a, e) <= a.range && lineOfSight(world, a, e);
     let target=requested&&inRange(requested)?requested:null;
     if(!target)for(const e of game.guards)if(inRange(e)&&(!target||distance(a,e)<distance(a,target)))target=e;
+    a.focus = target ? target.id : null; // presentation: who this agent is engaging
     if (requested && !inRange(requested) && !a.path.length && visibleGuard(game, requested)) a.path = findPath(world, a, requested);
     if (!(requested && inRange(requested))) move(a, dt);
     if (!game.holdFire && target && a.cooldown <= 0 && a.reload <= 0 && a.ammo && inRange(target)) fire(game, a, target);
@@ -466,28 +492,34 @@ export function tick(game, dt = STEP, applyControl = null) {
   for (const e of game.guards) {
     if (e.hp <= 0) continue;
     if(e.fear>0) {
-      e.fear=Math.max(0,e.fear-dt);
+      e.focus=null;e.fear=Math.max(0,e.fear-dt);
       if(e.stun>0)e.stun=Math.max(0,e.stun-dt);else move(e,dt,1.45);
       if(e.fear===0){e.path=[];e.think=0;e.cooldown=Math.max(e.cooldown,.5);}
       continue;
     }
-    if (e.stun > 0) { e.stun = Math.max(0, e.stun - dt); continue; }
+    if (e.stun > 0) { e.focus = null; e.stun = Math.max(0, e.stun - dt); continue; }
     e.cooldown -= dt; e.think -= dt;
     let target=null;
     for(const a of game.agents)if(a.hp>0&&distance(e,a)<e.detection&&lineOfSight(world,e,a)&&(!target||distance(e,a)<distance(e,target)))target=a;
     const courier=game.courier;
     if(courier?.active&&courier.hp>0&&distance(e,courier)<e.detection&&lineOfSight(world,e,courier)&&(!target||distance(e,courier)<distance(e,target)))target=courier;
+    // First contact is planned on the same tick instead of after the patrol
+    // think. A pursuer without a route, or whose target left the route's goal
+    // tile (including a switch of target), re-plans at most every 0.25 s.
+    const contact = target !== null && e.focus === null;
+    e.focus = target ? target.id : null;
     if (target && distance(e, target) <= e.range) {
       e.path = []; if (e.cooldown <= 0) fire(game, e, target);
     } else {
-      if (e.think <= 0) {
-        e.think = 1.1;
-        if (target) e.path = findPath(world, e, target);
+      const stale = target !== null && e.think <= THINK_INTERVAL - REPLAN_INTERVAL && (!e.path.length || !sameTile(e.path[e.path.length - 1], target));
+      if (e.think <= 0 || contact || stale) {
+        e.think = THINK_INTERVAL;
+        if (target) e.path = pursuitPath(world, e, target);
         else if (!e.path.length) {
           e.patrol = (e.patrol + 1) % 2;
           const waypoint=e.route?.[e.patrol];
           const dest = waypoint??nearestWalkable(world, e.home.x + e.patrol * 2, e.home.y);
-          if (dest) e.path = findPath(world, e, dest);
+          if (dest) e.path = pursuitPath(world, e, dest);
         }
       }
       move(e, dt);
@@ -512,7 +544,7 @@ export function tick(game, dt = STEP, applyControl = null) {
         message(game,`Lockdown initiated. ${game.lockdownRemaining} seconds to seize the reserve and extract.`,'danger');
       }
     }
-  } else if (!game.vault.done) {
+  } else if (!game.vault.done && currentObjectiveKey(game)==='vault') {
     if(game.mission.kind==='hold') {
       const occupied=living.some(a=>distance(a,game.vault)<1.7&&stationary(a)&&lineOfSight(world,a,game.vault));
       for(const [i,wave] of (game.mission.waves??[]).entries())if(!game.holdWavesSpawned[i]&&occupied&&game.vault.progress>=wave.at){
@@ -528,13 +560,20 @@ export function tick(game, dt = STEP, applyControl = null) {
       if(game.vault.progress>=objectiveDuration(game,'vault'))game.vault.done=true;
     }else channel(game.vault, objectiveDuration(game,'vault'));
     if (game.vault.done) {
-      message(game, `${game.mission.labels[1]} secured. Return every surviving agent to extraction.`, 'objective');
+      message(game, `${game.mission.labels[1]} secured. ${capturesComplete(game)?'Return every surviving agent to extraction.':'Secure remaining control points, then extract every survivor.'}`, 'objective');
       game.guards.push(...game.mission.reinforcements.map(([x,y,type],i)=>guard(200+i,x,y,game.difficulty,type)));
       if(game.courier){game.courier.active=true;game.courier.path=findPath(world,game.courier,game.exit);message(game,'Witness released. Use Escort to accompany them; stay within six tiles and line of sight.','objective');}
       game.alert = 30;
     }
   }
-  if (game.vault.done) {
+  if(game.relay.done) {
+    const key=currentObjectiveKey(game);
+    if(key.startsWith('capture')) {
+      const point=game[key];channel(point,objectiveDuration(game,key));
+      if(point.done)message(game,`${point.label} captured. ${capturesComplete(game)?'Extraction unlocked.':'Next control point unlocked.'}`,'objective');
+    }
+  }
+  if (capturesComplete(game)) {
     const courierReady=!game.courier||game.courier.active&&game.courier.hp>0&&distance(game.courier,game.exit)<=3;
     if (living.every(a => distance(a, game.exit) <= 3)&&courierReady) game.extraction += dt;
     else game.extraction = 0;

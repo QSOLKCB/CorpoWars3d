@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import {FixedClock} from './vendor/time.js';
-import {createCampaign,decodeCampaign,MISSIONS,WEAPONS,RESEARCH,equip,research,canResearch,missionUnlocked,settleMission} from './campaign.js';
+import {createCampaign,decodeCampaign,MISSIONS,WEAPONS,RESEARCH,equip,research,canResearch,missionUnlocked,settleMission,buyPatch,reservePatches,PATCH_COST,MAX_RESERVE_PATCHES} from './campaign.js';
 import {CHALLENGES,recordChallenges} from './challenges.js';
+import {objectiveKeys,objectiveLabel} from './objectives.js';
 import {visibleGuard,lineOfSight} from './simulation.js';
 import {createOperation,activeAgent,switchAgent,nextAgent,setTactical,selectSquad,command,objective,update,look,reload,SCALE,STEP,COLORS} from './fps.js';
 import {Renderer} from './renderer.js';
@@ -113,6 +114,8 @@ function renderHQ(){
     }
     select.value=campaign.loadout[a.id];select.addEventListener('change',()=>{equip(campaign,a.id,select.value);saveCampaign();renderHQ();});row.append(name,select);$('loadouts').append(row);
   }
+  $('patchStock').textContent=`${reservePatches(campaign)} / ${MAX_RESERVE_PATCHES} RESERVE PATCHES · ${PATCH_COST} CR EACH`;
+  $('buyPatch').disabled=campaign.cash<PATCH_COST||reservePatches(campaign)>=MAX_RESERVE_PATCHES;
   $('research').replaceChildren();
   for(const r of RESEARCH){
     const done=campaign.research.includes(r.id),b=document.createElement('button');b.className='research-card'+(done?' done':'');b.disabled=done||!canResearch(campaign,r.id);
@@ -121,10 +124,17 @@ function renderHQ(){
     b.addEventListener('click',()=>{research(campaign,r.id);saveCampaign();renderHQ();});$('research').append(b);
   }
 }
+// Reserve patches consumed in the field are spent immediately, so quitting or
+// retrying never refunds them (CorpoWars HQ rule).
+function issue(kind,point){
+  const before=g.reserveMedkits,ok=command(g,kind,point);
+  if(g.reserveMedkits<before){campaign.patchesUsed+=before-g.reserveMedkits;saveCampaign();}
+  return ok;
+}
 function execute(kind){
   if(!playing)return;
   const point=g.tactical?(lastMapPoint||objective(g).point):undefined;
-  const ok=command(g,kind,point);if(ok)sound.play(kind==='heal'?'loaded':kind==='emp'?'collateral':'scope');renderHUD();
+  const ok=issue(kind,point);if(ok)sound.play(kind==='heal'?'loaded':kind==='emp'?'collateral':'scope');renderHUD();
 }
 function makeSquad(){
   for(const a of g.agents){
@@ -143,7 +153,7 @@ function makeSquad(){
 function renderHUD(){
   if(!playing)return;
   const a=activeAgent(g),o=objective(g),living=g.agents.filter(u=>u.hp>0).length;
-  $('objectiveNumber').textContent='CONTRACT OBJECTIVE / '+(!g.relay.done?'01':!g.vault.done?'02':'03');$('objectiveText').textContent=o.label;$('objectiveProgress').style.width=(o.fraction*100)+'%';
+  $('objectiveNumber').textContent='CONTRACT OBJECTIVE / '+String(o.index+1).padStart(2,'0')+' OF '+String(o.total).padStart(2,'0');$('objectiveText').textContent=o.label;$('objectiveProgress').style.width=(o.fraction*100)+'%';
   $('squadCount').textContent=String(living).padStart(2,'0')+' ONLINE';$('selectionInfo').textContent=g.selected.size===living?'ALL SELECTED':g.selected.size+' SELECTED';
   for(const u of g.agents){
     const b=agentButtons[u.id];b.disabled=u.hp<=0;b.classList.toggle('active',u.id===g.viewId);b.classList.toggle('selected',g.selected.has(u.id));b.classList.toggle('dead',u.hp<=0);
@@ -176,7 +186,7 @@ function labels(){
     const visible=i===4||i!==g.viewId&&u.hp>0&&lineOfSight(g.world,a,u);
     const point=visible?renderer.project([u.x*SCALE,i===4?3.1:2.2+(u.elevation||0),u.y*SCALE]):null;
     label.hidden=!point;if(!point)continue;label.style.left=point[0]+'px';label.style.top=point[1]+'px';
-    const text=i===4?(goal.key==='exit'?'EXTRACTION':g.mission.labels[goal.key==='relay'?0:1]):u.name;
+    const text=i===4?objectiveLabel(g,goal.key):u.name;
     if(label.textContent!==text)label.textContent=text;
   }
   $('hitMarker').hidden=g.hit<=0;
@@ -203,11 +213,11 @@ function drawMap(canvas,large=false){
     c.strokeStyle=mapAttack?'#f17e68':'#ecb66d';c.lineWidth=2;c.beginPath();c.arc(x,y,13,0,Math.PI*2);c.moveTo(x-19,y);c.lineTo(x+19,y);c.moveTo(x,y-19);c.lineTo(x,y+19);c.stroke();
   }
   const current=objective(g);
-  for(const key of ['relay','vault','exit']){
+  for(const key of objectiveKeys(g)){
     const p=g[key],x=pad+p.x*s,y=pad+p.y*s,highlight=key===current.key;
     c.fillStyle=p.done?'#75d6c7':highlight?'#ecb66d':'#7d8e93';c.beginPath();c.moveTo(x,y-8);c.lineTo(x+8,y);c.lineTo(x,y+8);c.lineTo(x-8,y);c.closePath();c.fill();
     if(highlight){c.strokeStyle='#ecb66d66';c.beginPath();c.arc(x,y,18,0,Math.PI*2);c.stroke();}
-    if(large){c.font='11px monospace';c.fillText(key.toUpperCase(),x+13,y+4);}
+    if(large){c.font='11px monospace';c.fillText(objectiveLabel(g,key),x+13,y+4);}
   }
   for(const e of g.guards)if(visibleGuard(g,e)){
     c.fillStyle=e.stun>0?'#91b7e5':'#f17e68';c.fillRect(pad+e.x*s-5,pad+e.y*s-5,10,10);
@@ -237,7 +247,8 @@ for(const key of Object.keys(defaults)){
   });
 }
 $('difficulty').addEventListener('change',()=>{campaign.difficulty=$('difficulty').value;saveCampaign();});
-$('deploy').addEventListener('click',startMission);$('resume').addEventListener('click',()=>g.phase==='active'?setPaused(false):headquarters());
+$('deploy').addEventListener('click',startMission);
+$('buyPatch').addEventListener('click',()=>{if(buyPatch(campaign)){saveCampaign();sound.play('loaded');renderHQ();}});$('resume').addEventListener('click',()=>g.phase==='active'?setPaused(false):headquarters());
 $('restart').addEventListener('click',startMission);$('headquarters').addEventListener('click',headquarters);$('pauseButton').addEventListener('click',()=>setPaused(!g.paused));
 $('miniMapButton').addEventListener('click',()=>tactical());$('returnFPS').addEventListener('click',()=>tactical(false));
 $('selectAll').addEventListener('click',()=>{selectSquad(g,g.agents.map(a=>a.id));renderHUD();});
@@ -344,6 +355,6 @@ try{
   }});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
   // QA access is opt-in and absent in ordinary play. It never modifies mechanics.
-  if(new URLSearchParams(location.search).has('qa'))Object.defineProperty(window,'corpowarsQA',{value:{get game(){return g;},get renderer(){return renderer;},get clock(){return clock;},get devices(){return devices;},start:startMission,tactical,command:(kind,p)=>command(g,kind,p),switchTo,pause:setPaused}});
+  if(new URLSearchParams(location.search).has('qa'))Object.defineProperty(window,'corpowarsQA',{value:{get game(){return g;},get renderer(){return renderer;},get clock(){return clock;},get devices(){return devices;},start:startMission,tactical,command:(kind,p)=>issue(kind,p),switchTo,pause:setPaused}});
   requestAnimationFrame(frame);
 }catch(error){$('fatalText').textContent=error.message;$('fatal').hidden=false;console.error(error);}

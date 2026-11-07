@@ -185,6 +185,16 @@ const SIDES = Object.freeze([-1, 1]);
  * Emit one character. pose: {gait (-1..1 stride), dead, lod ('high'|'low'),
  * flash (bool), variant (code from variantCode, optional)}. Returns the part count.
  */
+/**
+ * Instance rotation for a character whose simulation heading is `yaw`.
+ * Both renderers rotate a box's local (x, z) by angle t to
+ * (x cos t + z sin t, -x sin t + z cos t), so local forward (-Z) lands on
+ * (-sin t, -cos t). The simulation and FPS camera head along (sin yaw, -cos yaw),
+ * therefore characters are placed with t = -yaw. Using yaw directly mirrored
+ * every east/west heading, so guards walking towards the player faced away.
+ */
+export const actorAngle = (yaw) => (yaw ? -yaw : 0);
+
 export function emitCharacter(emit, key, pose) {
   const s = pose.variant >= 0 ? variantSkin(key, pose.variant) : SKINS[key] ?? SKINS.guard;
   const glowAll = pose.flash ? 1 : 0;

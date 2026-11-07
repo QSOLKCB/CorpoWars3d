@@ -5,7 +5,8 @@ import {perspective,view,multiply,transform,mix} from './math.js';
 import {buildCity,PALETTE} from './city.js';
 import {SCALE,COLORS,eyeOf,activeAgent} from './fps.js';
 import {SoftwareRenderer} from './software-renderer.js';
-import {emitCharacter,skinKey,actorVariant,SKINS} from './skins.js';
+import {objectiveKeys,currentObjectiveKey} from './objectives.js';
+import {emitCharacter,skinKey,actorVariant,SKINS,actorAngle} from './skins.js';
 // Beyond this distance (metres) characters drop their small detail parts.
 export const CHARACTER_LOD_DISTANCE=38;
 // A struck actor is self-lit for this long (simulation seconds).
@@ -155,7 +156,7 @@ export class Renderer {
   }
   unit(batch,a,time,alpha,eye=null){
     const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE;
-    const angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle),dead=a.hp<=0,key=skinKey(a);
+    const angle=actorAngle(a.yaw||0),c=Math.cos(angle),s=Math.sin(angle),dead=a.hp<=0,key=skinKey(a);
     const moving=Math.abs(a.x-(a.prevX??a.x))+Math.abs(a.y-(a.prevY??a.y))>.001;
     const base=a.elevation||0,crouch=a.stance==='crouch'?.70:1;
     const far=eye&&Math.hypot(x-eye[0],z-eye[2])>CHARACTER_LOD_DISTANCE;
@@ -197,8 +198,10 @@ export class Renderer {
     for(const u of g.agents)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha,eye);
     for(const u of g.guards)if(menu||u.id!==g.viewId)this.unit(batch,u,g.time,alpha,eye);
     if(g.courier?.active)this.unit(batch,g.courier,g.time,alpha,eye);
-    for(const [i,key] of ['relay','vault','exit'].entries()){
-      const p=g[key],c=p.done?PALETTE.teal:i===1&&!g.relay.done?[.25,.29,.32]:i===2?PALETTE.teal:PALETTE.gold;
+    const current=currentObjectiveKey(g);
+    for(const [i,key] of objectiveKeys(g).entries()){
+      // Completed and extraction: teal. Current: gold. Locked control nodes: grey.
+      const p=g[key],c=p.done||key==='exit'?PALETTE.teal:key===current?PALETTE.gold:[.25,.29,.32];
       if(key!=='exit'){
         batch.box(p.x*SCALE,.6,p.y*SCALE,.65,1.2,.55,[.13,.20,.23]);
         batch.box(p.x*SCALE,1.1,p.y*SCALE-.29,.5,.32,.03,c,1);
