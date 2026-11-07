@@ -101,8 +101,36 @@ export const MISSIONS = [
     reinforcements: [[29.5,2.5,'marksman'],[20.5,11.5,'bulwark'],[2.5,11.5,'guard']] },
 ];
 
+// CorpoWars 289ba40 control routes: original routes remain intact and extra
+// nodes extend each operation (2-7 captures). The two CorpoWars3d expansion
+// contracts reuse their districts with seven captures on new street routes.
+// Every coordinate is on the connected street network (tests enforce it).
+const CONTROL_ROUTES = [
+  [], [[20.5, 29.5]], [[20.5, 29.5], [11.5, 20.5]],
+  [[11.5, 11.5], [20.5, 2.5], [29.5, 11.5]],
+  [[29.5, 2.5], [11.5, 2.5], [11.5, 20.5], [2.5, 20.5]],
+  [[29.5, 29.5], [20.5, 20.5], [11.5, 11.5], [2.5, 11.5], [11.5, 2.5]],
+  [[29.5, 20.5], [29.5, 11.5], [20.5, 11.5], [11.5, 11.5], [20.5, 2.5]],
+  [[29.5, 2.5], [20.5, 11.5], [20.5, 20.5], [2.5, 20.5], [2.5, 11.5]],
+];
+for (const [i, mission] of MISSIONS.entries()) {
+  mission.captures = CONTROL_ROUTES[i];
+  mission.parTime += mission.captures.length * 30;
+  mission.brief += ` Secure all ${mission.captures.length + 2} capture points before using the single extraction zone.`;
+}
+// Reserve trauma patches (CorpoWars HQ): bought between operations, used only
+// after the issued patches, persisting until consumed and spent on retries.
+export const PATCH_COST = 250;
+export const MAX_RESERVE_PATCHES = 12;
+export function reservePatches(c) { return (c.patchesBought ?? 0) - (c.patchesUsed ?? 0); }
+export function buyPatch(c) {
+  if (c.cash < PATCH_COST || reservePatches(c) >= MAX_RESERVE_PATCHES) return false;
+  c.cash -= PATCH_COST; c.patchesBought = (c.patchesBought ?? 0) + 1;
+  return true;
+}
+
 export function createCampaign() {
-  return { version: 1, cash: STARTING_CASH, difficulty: 'relaxed', research: [], owned: Array.from({length:4},()=>['issued']), loadout: ['issued','issued','issued','issued'], modes: [0,0,0,0], completed: [], mission: 0, challenges: {} };
+  return { version: 1, cash: STARTING_CASH, patchesBought: 0, patchesUsed: 0, difficulty: 'relaxed', research: [], owned: Array.from({length:4},()=>['issued']), loadout: ['issued','issued','issued','issued'], modes: [0,0,0,0], completed: [], mission: 0, challenges: {} };
 }
 export function canResearch(c, id) {
   const item = RESEARCH.find(n=>n.id===id);
@@ -142,7 +170,10 @@ export function decodeCampaign(text) {
     if(!Array.isArray(s.modes)||s.modes.length!==4||s.modes.some(m=>!Number.isInteger(m)||m<0||m>2))return null;
     Object.assign(c,{cash:s.cash,research:[...s.research],completed:[...s.completed],owned:s.owned.map(a=>[...a]),loadout:[...s.loadout],modes:[...s.modes]});
     if(!missionUnlocked(c,s.mission))return null;c.mission=s.mission;
-    const spent=c.research.reduce((sum,id)=>sum+RESEARCH.find(n=>n.id===id).cost,0)+c.owned.flat().reduce((sum,id)=>sum+WEAPONS[id].cost,0);
+    const bought=s.patchesBought===undefined?0:s.patchesBought,used=s.patchesUsed===undefined?0:s.patchesUsed;
+    if(!Number.isSafeInteger(bought)||!Number.isSafeInteger(used)||bought<0||used<0||used>bought||bought>Math.floor(maximumCash/PATCH_COST)||bought-used>MAX_RESERVE_PATCHES)return null;
+    c.patchesBought=bought;c.patchesUsed=used;
+    const spent=bought*PATCH_COST+c.research.reduce((sum,id)=>sum+RESEARCH.find(n=>n.id===id).cost,0)+c.owned.flat().reduce((sum,id)=>sum+WEAPONS[id].cost,0);
     if(c.cash!==STARTING_CASH+c.completed.reduce((sum,i)=>sum+MISSIONS[i].reward,0)-spent)return null;
     // This optional v1 field keeps prior saves valid, including a finished
     // three-contract campaign. Medals carry no credit value or unlock power.

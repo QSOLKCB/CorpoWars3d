@@ -4,6 +4,7 @@ import {createGame, tick, startGame, walkable, nearestWalkable, findPath,
   selectAgents, orderMove, orderAttack, stopAgents, medkit, pulse, activatePanic,
   message, objectiveDuration, orderEscort, cycleMode} from './simulation.js';
 import {createCampaign} from './campaign.js';
+import {currentObjectiveKey,objectiveKeys} from './objectives.js';
 import {clamp, forward, rayBox, boxAt} from './math.js';
 import {ballisticStep,JUMP_IMPULSE} from './physics.js';
 export const SCALE = 2.5, STEP = 1/60, RADIUS = .13;
@@ -162,6 +163,15 @@ function updateFollow(g,dt) {
     if(dest){used.add(Math.floor(dest.y)*g.world.size+Math.floor(dest.x));a.path=findPath(g.world,a,dest);a.target=null;}
   }
 }
+// The living unit an autonomous actor is engaging this tick (simulation focus).
+export function engaged(g,unit) {
+  const id=unit.focus;if(id==null)return null;
+  let t=null;
+  if(unit.team==='agent'){for(const e of g.guards)if(e.id===id){t=e;break;}}
+  else if(g.courier&&g.courier.id===id)t=g.courier;
+  else for(const a of g.agents)if(a.id===id){t=a;break;}
+  return t&&t.hp>0&&(t.x!==unit.x||t.y!==unit.y)?t:null;
+}
 export function update(g,input={},dt=STEP) {
   if(g.paused||g.phase!=='active'||!Number.isFinite(dt)||dt<=0)return;
   dt=Math.min(dt,.1);updateFollow(g,dt);
@@ -174,19 +184,25 @@ export function update(g,input={},dt=STEP) {
     g.ads=clamp(g.ads+((input.ads?1:0)-g.ads)*Math.min(1,dt*16),0,1);
     if(input.fire)shoot(g);
   }
-  for(const a of [...g.agents,...g.guards]){
-    if(a.id===g.controlled)continue;
-    const dx=a.x-a.prevX,dy=a.y-a.prevY;
-    if(dx*dx+dy*dy>1e-8)a.yaw=Math.atan2(dx,-dy);
-    else if(a.target!=null){const t=g.guards.find(e=>e.id===a.target);if(t)a.yaw=Math.atan2(t.x-a.x,a.y-t.y);}
-    // A released agent settles safely to ground before its next direct view.
-    if(a.elevation>0){const airborne=ballisticStep(a.elevation,a.vy||0,dt);a.elevation=airborne.elevation;a.vy=airborne.velocity;}
-  }
+  for(const a of g.agents)settle(g,a,dt);
+  for(const a of g.guards)settle(g,a,dt);
   g.hit=Math.max(0,g.hit-dt);g.recoil=Math.max(0,g.recoil-dt*6);
   for(let i=g.tracers.length-1;i>=0;i--)if((g.tracers[i].life-=dt)<=0)g.tracers.splice(i,1);
 }
+// Presentation pose after a tick: facing and released-agent landing.
+function settle(g,a,dt) {
+  if(a.id===g.controlled)return;
+  // Face whoever this unit is engaging, otherwise the way it is walking.
+  const focus=engaged(g,a),dx=a.x-a.prevX,dy=a.y-a.prevY;
+  if(focus)a.yaw=Math.atan2(focus.x-a.x,a.y-focus.y);
+  else if(dx*dx+dy*dy>1e-8)a.yaw=Math.atan2(dx,-dy);
+  else if(a.target!=null){const t=g.guards.find(e=>e.id===a.target);if(t)a.yaw=Math.atan2(t.x-a.x,a.y-t.y);}
+  // A released agent settles safely to ground before its next direct view.
+  if(a.elevation>0){const airborne=ballisticStep(a.elevation,a.vy||0,dt);a.elevation=airborne.elevation;a.vy=airborne.velocity;}
+}
 export function objective(g) {
-  const key=!g.relay.done?'relay':!g.vault.done?'vault':'exit';
-  return {key,point:g[key],label:key==='exit'?'EXTRACT ALL SURVIVORS':g.mission.objectives[key==='relay'?0:1],
+  const key=currentObjectiveKey(g),keys=objectiveKeys(g);
+  return {key,point:g[key],index:keys.indexOf(key),total:keys.length,
+    label:key==='exit'?'EXTRACT ALL SURVIVORS':key.startsWith('capture')?'Capture '+g[key].label.toLowerCase().replace('control','control point'):g.mission.objectives[key==='relay'?0:1],
     fraction:clamp((key==='exit'?g.extraction:g[key].progress)/objectiveDuration(g,key),0,1)};
 }

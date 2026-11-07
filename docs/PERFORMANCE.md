@@ -53,6 +53,29 @@ update at 10 Hz. Gameplay remains 60 Hz with a bounded catch-up window.
   Do not assert speedups or frame-time gains until comparable GPU/browser runs
   include actual frame timing, uploads, allocations and workload parity.
 
+## Simulation OPT pass (exact)
+
+- OPT-INV-001: in a tick, positions do not change between target selection and
+  movement, so each agent's requested-target range test runs once (it ran up to
+  three times) and each candidate distance is computed once and reused for the
+  nearest comparison and the guard's fire-range test. `lineOfSight` is pure, so
+  it is tested after the cheaper distance comparison without changing which
+  target wins.
+- OPT-REDUCE-001: a faithfully rounded `Math.hypot(dx, dy)` is never below
+  `max(|dx|, |dy|)`, so pairs outside the axis box of a detection or weapon
+  range are rejected before the hypotenuse and line of sight. A test sweeps
+  200,000 pairs to confirm the bound on the running engine. Temporary
+  squad+guard arrays and the per-tick filtered effects array are gone; effects
+  are compacted in place in the same order with the same arithmetic.
+- `scripts/parity-ab.mjs <ref>` exports `src/` at a commit and plays all eight
+  contracts on both difficulties in both trees: tactical orders, scripted
+  first-person movement, look, fire, reload, jumps and abilities, with live
+  combat. It hashes the complete serialised state after every tick and fails on
+  the first difference. `docs/PERFORMANCE_SIM_AB.json` records the run against
+  the feature commit: 28,257 identical ticks; interleaved ABBA medians of
+  19.86 µs → 14.24 µs per tick (Node 22, this container). It is CPU simulation
+  cost only. No frame-rate claim is made.
+
 ## Bounded local arithmetic experiment
 
 Run `node scripts/benchmark.js --write` to regenerate `PERFORMANCE_LOCAL.json`.

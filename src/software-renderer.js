@@ -5,7 +5,8 @@
 import {perspective,view,multiply,transform,mix} from './math.js';
 import {SCALE,COLORS,eyeOf,activeAgent} from './fps.js';
 import {lineOfSight} from './simulation.js';
-import {emitCharacter,skinKey,actorVariant,SKINS} from './skins.js';
+import {objectiveKeys,currentObjectiveKey} from './objectives.js';
+import {emitCharacter,skinKey,actorVariant,SKINS,actorAngle} from './skins.js';
 const FACES=[
   {n:[0,1,0],p:[[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]]},
   {n:[0,-1,0],p:[[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]},
@@ -85,7 +86,7 @@ export class SoftwareRenderer {
   // every face, so it keeps roughly its previous part budget per character.
   unit(a,time,alpha){
     if(a.hp<=0)return;
-    const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE,angle=a.yaw||0,c=Math.cos(angle),s=Math.sin(angle);
+    const x=mix(a.prevX??a.x,a.x,alpha)*SCALE,z=mix(a.prevY??a.y,a.y,alpha)*SCALE,angle=actorAngle(a.yaw||0),c=Math.cos(angle),s=Math.sin(angle);
     const base=a.elevation||0,crouch=a.stance==='crouch'?.7:1;
     const moving=Math.abs(a.x-a.prevX)+Math.abs(a.y-a.prevY)>.001,key=skinKey(a);
     emitCharacter((dx,y,dz,w,h,d,col,glow)=>this.box(x+dx*c+dz*s,base+y*crouch,z-dx*s+dz*c,w,h*crouch,d,col,glow,angle),
@@ -116,8 +117,9 @@ export class SoftwareRenderer {
     }else{c.drawImage(this.backdrop,0,0);this.stats.draws++;this.stats.cacheHits=(this.stats.cacheHits||0)+1;}
     for(const u of [...g.agents,...g.guards])if((menu||u.id!==g.viewId)&&(menu||lineOfSight(g.world,a,u)))this.unit(u,g.time,alpha);
     if(g.courier?.active&&(menu||lineOfSight(g.world,a,g.courier)))this.unit(g.courier,g.time,alpha);
-    for(const [i,key] of ['relay','vault','exit'].entries()){
-      const p=g[key],col=p.done||i===2?[.35,.8,.7]:[.95,.65,.28];
+    const current=currentObjectiveKey(g);
+    for(const [i,key] of objectiveKeys(g).entries()){
+      const p=g[key],col=p.done||key==='exit'?[.35,.8,.7]:key===current?[.95,.65,.28]:[.25,.29,.32];
       if(!menu&&!lineOfSight(g.world,a,p))continue;
       this.box(p.x*SCALE,key==='exit'?.03:.6,p.y*SCALE,key==='exit'?3.4:.65,key==='exit'?.04:1.2,key==='exit'?3.4:.55,key==='exit'?col:[.17,.25,.27]);
       this.box(p.x*SCALE,2.6+(reduced?0:Math.sin(time*2+i)*.1),p.y*SCALE,.18,.18,.18,col,1);
