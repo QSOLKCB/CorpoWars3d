@@ -122,9 +122,36 @@ the operator can still fire manually.
 
 Terminals and hold zones require a living agent to be stationary nearby. Direct
 movement and jumping interrupt interaction even when the AI route is empty.
-Complete the relay, then the second objective, then bring **every surviving
-agent** into extraction. Witness Protection also requires the courier alive at
-extraction: press E after release to keep selected agents escorting them.
+Complete the relay, then the second objective, then capture every district
+**control node** in order, then bring **every surviving agent** into extraction.
+Witness Protection captures its control nodes before the witness is released,
+and requires the courier alive at extraction: press E after release to keep
+selected agents escorting them.
+
+### Control nodes and field supplies (from CorpoWars)
+
+As in CorpoWars, contracts escalate from **2 to 7 capture points** with one
+extraction zone; Black Dividend and Proxy Election take seven. Extra nodes are
+four-second channels on the connected street network, each with a defending
+guard (later nodes use bulwarks). The HUD counts `OBJECTIVE / 03 OF 07`, locked
+nodes are grey and the current one is gold in both views. Par times gain 30 s per
+extra node; lockdown budgets are unchanged and remain completable on Hostile.
+
+Headquarters → Research & Equipment sells **reserve trauma patches** for 250 CR
+(at most 12 in stock). The two issued patches (four with Field surgery) are used
+first; reserves persist between operations, and a reserve used in the field stays
+spent even if you abandon or retry. Saves validate the full credit ledger; older
+saves load with no reserves.
+
+### Enemy awareness
+
+Guards and squad AI face whoever they are engaging, so a guard that stops to
+fire turns towards you and squad agents aim while they move. A patrol that spots
+you reacts on the same tick instead of finishing its patrol leg, and its chase
+route starts towards you rather than back to the centre of its current tile.
+Pursuers re-plan (at most every 0.25 s) when you leave the tile they were heading
+for. Earlier builds drew every character mirrored on east/west headings, so a
+guard walking towards you looked as if it were walking away.
 
 ## Contracts and headquarters
 
@@ -217,6 +244,13 @@ detail parts, and the software renderer always uses that lower detail.
 - OPT invariant-driven rotation reuse avoids repeated trigonometry when cuboids
   have unchanged angles, preserving Float32 instance data; ordinary frames avoid
   allocating temporary concatenated squad/guard arrays.
+- OPT simulation pass (exact, A/B gated): one distance per target candidate,
+  an axis-box early reject before `Math.hypot`/line of sight, and no per-tick
+  temporary arrays. `scripts/parity-ab.mjs` hashes the full state after every
+  tick against the previous commit across all 16 contract/difficulty runs with
+  live combat; the recorded run matched on 28,257 ticks and the median CPU cost
+  per tick fell from 19.9 to 14.2 µs on this host
+  ([raw samples](docs/PERFORMANCE_SIM_AB.json); not an FPS claim).
 - Ground-level jump trajectories use exact constant-acceleration integration
   across fixed steps, retaining the original cover/occupancy model.
 - Cover rays reuse one private scratch box, reading every building field fresh;
@@ -243,6 +277,7 @@ node --test tests/*.test.js
 node scripts/check.js
 node scripts/build.js
 node scripts/benchmark.js
+node scripts/parity-ab.mjs HEAD --time
 ```
 
 `dist/` is an allowlisted standalone static artifact. CI additionally uses

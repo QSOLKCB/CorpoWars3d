@@ -8,6 +8,11 @@ import { capturesComplete, currentObjectiveKey } from './objectives.js';
 export const STEP = 1 / 30;
 export const SIZE = 36;
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+// OPT-REDUCE early reject: a faithfully rounded hypot(dx, dy) is never below
+// max(|dx|, |dy|) (that maximum is a float no greater than the exact value), so
+// a pair outside the axis box fails `distance < limit` / `distance <= limit`
+// exactly as it would after computing the hypotenuse and line of sight.
+const outside = (a, b, limit) => Math.abs(a.x - b.x) > limit || Math.abs(a.y - b.y) > limit;
 export const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 export function random(seed) {
@@ -316,7 +321,7 @@ export function orderEscort(game) {
 }
 
 export function visibleGuard(game, enemy) {
-  return enemy.hp > 0 && game.agents.some(a => a.hp > 0 && distance(a, enemy) <= 11 && lineOfSight(game.world, a, enemy));
+  return enemy.hp > 0 && game.agents.some(a => a.hp > 0 && !outside(a, enemy, 11) && distance(a, enemy) <= 11 && lineOfSight(game.world, a, enemy));
 }
 
 export function orderAttack(game, id) {
@@ -445,6 +450,8 @@ function updateCourier(game,dt) {
   if(game.agents.some(a=>a.hp>0&&distance(a,courier)<=6&&lineOfSight(game.world,a,courier)))move(courier,dt);
 }
 
+const inRange = (world, a, e) => e.hp > 0 && !outside(a, e, a.range) && distance(a, e) <= a.range && lineOfSight(world, a, e);
+
 function fire(game, unit, target) {
   unit.cooldown = unit.interval;
   if (unit.team === 'agent') unit.ammo--;
@@ -464,9 +471,14 @@ export function tick(game, dt = STEP, applyControl = null) {
   if (game.phase !== 'active' || game.paused || !Number.isFinite(dt) || dt <= 0) return;
   dt = Math.min(dt, .1); game.time += dt; game.alert = Math.max(0, game.alert - dt);
   const lockdownWasRunning=game.lockdownRemaining!==null;
-  game.effects = game.effects.filter(e => (e.life -= dt) > 0);
+  // OPT-REDUCE: compact in place (same order and arithmetic) instead of
+  // allocating a filtered array every tick.
+  const effects = game.effects; let kept = 0;
+  for (let i = 0; i < effects.length; i++) { const e = effects[i]; if ((e.life -= dt) > 0) effects[kept++] = e; }
+  effects.length = kept;
   const world = game.world;
-  for(const unit of [...game.agents,...game.guards]){unit.prevX=unit.x;unit.prevY=unit.y;}
+  for(const unit of game.agents){unit.prevX=unit.x;unit.prevY=unit.y;}
+  for(const unit of game.guards){unit.prevX=unit.x;unit.prevY=unit.y;}
   if(game.courier){game.courier.prevX=game.courier.x;game.courier.prevY=game.courier.y;}
   for(const a of game.agents)a.directMoving=false;
   if(applyControl)applyControl();
@@ -479,13 +491,24 @@ export function tick(game, dt = STEP, applyControl = null) {
     if (!a.ammo && a.reload <= 0) a.reload = a.reloadTime;
     if (a.id === game.controlled) continue;
     const requested = game.guards.find(e => e.id === a.target && e.hp > 0);
-    const inRange = e => e.hp > 0 && distance(a, e) <= a.range && lineOfSight(world, a, e);
-    let target=requested&&inRange(requested)?requested:null;
-    if(!target)for(const e of game.guards)if(inRange(e)&&(!target||distance(a,e)<distance(a,target)))target=e;
+    // OPT-INV: positions are unchanged until move(), so the requested target's
+    // range test and each candidate distance are evaluated once. lineOfSight is
+    // pure, so testing it after the cheaper distance comparison selects the
+    // same nearest target as the original short-circuit order.
+    const requestedInRange = !!requested && inRange(world, a, requested);
+    let target = requestedInRange ? requested : null;
+    if (!target) {
+      let best = Infinity;
+      for (const e of game.guards) {
+        if (e.hp <= 0 || outside(a, e, a.range)) continue;
+        const d = distance(a, e);
+        if (d <= a.range && d < best && lineOfSight(world, a, e)) { target = e; best = d; }
+      }
+    }
     a.focus = target ? target.id : null; // presentation: who this agent is engaging
-    if (requested && !inRange(requested) && !a.path.length && visibleGuard(game, requested)) a.path = findPath(world, a, requested);
-    if (!(requested && inRange(requested))) move(a, dt);
-    if (!game.holdFire && target && a.cooldown <= 0 && a.reload <= 0 && a.ammo && inRange(target)) fire(game, a, target);
+    if (requested && !requestedInRange && !a.path.length && visibleGuard(game, requested)) a.path = findPath(world, a, requested);
+    if (!requestedInRange) move(a, dt);
+    if (!game.holdFire && target && a.cooldown <= 0 && a.reload <= 0 && a.ammo && inRange(world, a, target)) fire(game, a, target);
     if (a.target !== null && !requested) { a.target = null; a.path = []; }
   }
   updateCourier(game,dt);
@@ -499,16 +522,18 @@ export function tick(game, dt = STEP, applyControl = null) {
     }
     if (e.stun > 0) { e.focus = null; e.stun = Math.max(0, e.stun - dt); continue; }
     e.cooldown -= dt; e.think -= dt;
-    let target=null;
-    for(const a of game.agents)if(a.hp>0&&distance(e,a)<e.detection&&lineOfSight(world,e,a)&&(!target||distance(e,a)<distance(e,target)))target=a;
+    // OPT-INV: one distance per candidate, reused for the comparison and the
+    // range test below (nothing moves in between); LOS is tested last.
+    let target=null,best=Infinity;
+    for(const a of game.agents){if(a.hp<=0||outside(e,a,e.detection))continue;const d=distance(e,a);if(d<e.detection&&d<best&&lineOfSight(world,e,a)){target=a;best=d;}}
     const courier=game.courier;
-    if(courier?.active&&courier.hp>0&&distance(e,courier)<e.detection&&lineOfSight(world,e,courier)&&(!target||distance(e,courier)<distance(e,target)))target=courier;
+    if(courier?.active&&courier.hp>0){const d=distance(e,courier);if(d<e.detection&&d<best&&lineOfSight(world,e,courier)){target=courier;best=d;}}
     // First contact is planned on the same tick instead of after the patrol
     // think. A pursuer without a route, or whose target left the route's goal
     // tile (including a switch of target), re-plans at most every 0.25 s.
     const contact = target !== null && e.focus === null;
     e.focus = target ? target.id : null;
-    if (target && distance(e, target) <= e.range) {
+    if (target && best <= e.range) {
       e.path = []; if (e.cooldown <= 0) fire(game, e, target);
     } else {
       const stale = target !== null && e.think <= THINK_INTERVAL - REPLAN_INTERVAL && (!e.path.length || !sameTile(e.path[e.path.length - 1], target));

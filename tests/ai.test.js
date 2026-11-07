@@ -102,3 +102,15 @@ test('re-planning a pursuit is bounded while the target keeps changing tiles',()
   assert.ok(plans>=3,'follows the moving player');
   assert.ok(plans<=1+Math.ceil(1/.25),`at most one re-plan per 0.25 s (${plans})`);
 });
+
+test('the distance early-reject relies only on hypot never undercutting its larger leg',()=>{
+  // simulation.js skips pairs with |dx| or |dy| beyond a limit before Math.hypot.
+  // That is exact only if hypot(dx, dy) >= max(|dx|, |dy|) on this engine.
+  let s=12345;const r=()=>(s=(Math.imul(s,1664525)+1013904223)>>>0)/4294967296;
+  const values=[0,-0,1e-300,5e-324,.1,.3,1/3,6.5,9,11,36,1e300,Number.MAX_VALUE];
+  for(let i=0;i<200000;i++)values.push((r()-.5)*80,(r()-.5)*Math.pow(2,Math.floor(r()*60)-30));
+  for(let i=0;i+1<values.length;i++){
+    const x=values[i],y=values[values.length-1-i];
+    assert.ok(Math.hypot(x,y)>=Math.max(Math.abs(x),Math.abs(y)),`hypot(${x}, ${y})`);
+  }
+});

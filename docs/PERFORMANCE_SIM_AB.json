@@ -1,0 +1,36 @@
+{
+  "reference": "2a6719a571d3d32d63ff5807a537682d09354300",
+  "scenarios": 16,
+  "ticks_compared": 28257,
+  "parity": "exact",
+  "outcomes": "0/r:active@2400 0/h:lost@1366 1/r:active@2400 1/h:lost@817 2/r:active@2400 2/h:lost@1259 3/r:lost@2394 3/h:lost@1408 4/r:active@2400 4/h:lost@1124 5/r:active@2400 5/h:lost@1193 6/r:lost@2228 6/h:lost@1152 7/r:active@2400 7/h:lost@916",
+  "reference_us_per_tick": [
+    19.97,
+    19.8,
+    19.2,
+    21.03,
+    19.86,
+    16.41
+  ],
+  "candidate_us_per_tick": [
+    13.78,
+    13.58,
+    14.24,
+    15.06,
+    15.13,
+    11.74
+  ],
+  "median_reference_us": 19.86,
+  "median_candidate_us": 14.24,
+  "node": "v22.23.4",
+  "source_sha256": {
+    "src/simulation.js": {
+      "reference": "4532277740e978094bcae4ce8fd199296e0c7b015e50478bdb9ed3a87aec3b7b",
+      "candidate": "837fa47ae000f1b6b0869704d0c15d148f8fed097d1fa5a8627a5a1836149675"
+    },
+    "src/fps.js": {
+      "reference": "53c50c46d38ba5c0ed7012884aa51a89dc6d992ab4690034f59a5778394b35c1",
+      "candidate": "d0e53361143c326b6e83ce6959e683231963e44c7c8ed8ac39f757473d64c88a"
+    }
+  }
+}

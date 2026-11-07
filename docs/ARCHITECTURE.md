@@ -50,6 +50,32 @@ bounded substeps; movement slides independently along X/Y. Autonomous routing
 retains tile-center paths. Buildings' blocked tile footprints match their 3D
 cover boxes and are full-height obstacles; jumping does not bypass cover.
 
+## Facing and pursuit
+
+Simulation headings follow the camera: yaw θ faces (sin θ, −cos θ) on the x/y
+ground plane. Both renderers rotate a part's local (x, z) by t to
+(x cos t + z sin t, −x sin t + z cos t), so characters are placed with
+`actorAngle(θ) = −θ`; local −Z is forward in `skins.js`. `tests/ai.test.js`
+checks every emitted part of both renderers against that rotation.
+
+`tick` records presentation-only `focus` ids: the guard an autonomous agent is
+engaging, and the agent or courier a guard has detected. After each tick the FPS
+adapter faces units at their focus, otherwise along their motion. Guards plan a
+chase on first contact, re-plan at most every 0.25 s when the target leaves the
+route's goal tile or the route is empty, and keep the 1.1 s patrol think.
+`pursuitPath` drops the unit's own tile centre from the start of a route when a
+second waypoint exists; 4-connected tiles keep the shortcut inside walkable
+tiles.
+
+## Control nodes and reserves
+
+`objectives.js` (from CorpoWars) defines the order: relay, vault, then control
+nodes, then exit; escort contracts capture nodes before the vault releases the
+witness. Nodes are four-second stationary channels with the same rules as the
+terminals, and each spawns one defender (ids 500+). Reserve patches add to the
+issued medkits; the issued ones are spent first, and `main.js` records reserve
+consumption in the campaign save immediately.
+
 ## Lifecycle and failure paths
 
 The VANILLAJS clock uses a 1/60 s step, at most six updates and 0.1 s incoming
